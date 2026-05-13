@@ -142,6 +142,196 @@ export class NetworkModel {
         return ductRecord.mesh;
     }
 
+    _projectPointToSegment(point, segment) {
+        const ax = segment.from.x;
+        const az = segment.from.z;
+        const bx = segment.to.x;
+        const bz = segment.to.z;
+        const abx = bx - ax;
+        const abz = bz - az;
+        const apx = point.x - ax;
+        const apz = point.z - az;
+        const abLenSq = abx * abx + abz * abz;
+        if (abLenSq === 0) return { x: ax, z: az };
+
+        const t = Math.max(0, Math.min(1, (apx * abx + apz * abz) / abLenSq));
+        return { x: ax + abx * t, z: az + abz * t };
+    }
+
+    _closestRoadPoint(point) {
+        const roads = [
+            { from: { x: -75, z: 0 }, to: { x: 75, z: 10 } },
+            { from: { x: 0, z: -75 }, to: { x: -10, z: 75 } },
+            { from: { x: -40, z: -75 }, to: { x: -30, z: 75 } },
+            { from: { x: 40, z: -75 }, to: { x: 50, z: 75 } },
+            { from: { x: -75, z: 30 }, to: { x: 75, z: 40 } },
+            { from: { x: -75, z: -30 }, to: { x: 75, z: -40 } }
+        ];
+
+        let best = null;
+        let bestDist = Infinity;
+        roads.forEach(segment => {
+            const projected = this._projectPointToSegment(point, segment);
+            const d = Math.sqrt((projected.x - point.x) ** 2 + (projected.z - point.z) ** 2);
+            if (d < bestDist) {
+                bestDist = d;
+                best = projected;
+            }
+        });
+        return best || point;
+    }
+
+    _decorateBuilding(building, type, seed = 0) {
+        const { w, d, h } = building.metadata.dimensions;
+        const style = (seed % 3);
+
+        // Facade variation while keeping existing base mesh
+        const paletteApartment = ['#c6cdd5', '#bfc7d1', '#d1cbc2', '#c9d2c0'];
+        const paletteHouse = ['#d6c9b5', '#cbb7a3', '#c2b0a5', '#bfb9ad'];
+        const colorHex = (type === 'Apartment' ? paletteApartment : paletteHouse)[seed % 4];
+        if (building.material) {
+            building.material.diffuseColor = BABYLON.Color3.FromHexString(colorHex);
+            building.material.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+        }
+
+        const winMat = this._getOrCreateMat(`winMat-${style}`, style === 0 ? '#8ec9ff' : (style === 1 ? '#a8d8ff' : '#9fd0f6'));
+        winMat.emissiveColor = BABYLON.Color3.FromHexString('#8ec9ff').scale(0.12);
+
+        const doorMat = this._getOrCreateMat(`doorMat-${style}`, style === 0 ? '#5a4638' : (style === 1 ? '#6b5240' : '#4f3d31'));
+        const roofMat = this._getOrCreateMat(`roofMat-${style}`, style === 0 ? '#6f737a' : (style === 1 ? '#626972' : '#737b85'));
+
+        // Windows repeated by floor and by bay
+        const floorHeight = type === 'Apartment' ? 2.7 : 2.4;
+        const rows = Math.max(1, Math.floor((h - 1.4) / floorHeight));
+        const frontCols = Math.max(1, Math.floor((w - 1.2) / 1.5));
+        const sideCols = Math.max(1, Math.floor((d - 1.2) / 1.6));
+        const winW = Math.min(0.85, Math.max(0.45, w * 0.2));
+        const winH = type === 'Apartment' ? 0.85 : 0.72;
+        const winDepth = 0.06;
+
+        const placeWindow = (x, y, z, isSide = false) => {
+            const windowMesh = BABYLON.MeshBuilder.CreateBox(`win-${building.name}-${x.toFixed(2)}-${y.toFixed(2)}-${z.toFixed(2)}`, {
+                width: isSide ? winDepth : winW,
+                height: winH,
+                depth: isSide ? winW : winDepth
+            }, this.scene);
+            windowMesh.parent = building;
+            windowMesh.position = new BABYLON.Vector3(x, y, z);
+            windowMesh.material = winMat;
+        };
+
+        for (let r = 0; r < rows; r++) {
+            const y = -h / 2 + 1.15 + r * floorHeight;
+            if (y > h / 2 - 0.8) break;
+
+            for (let c = 0; c < frontCols; c++) {
+                const x = -w / 2 + ((c + 1) * w) / (frontCols + 1);
+                placeWindow(x, y, d / 2 + 0.04, false);
+                placeWindow(x, y, -d / 2 - 0.04, false);
+            }
+
+            // Side facades for taller buildings
+            if (type === 'Apartment' || rows > 2) {
+                for (let c = 0; c < sideCols; c++) {
+                    const z = -d / 2 + ((c + 1) * d) / (sideCols + 1);
+                    placeWindow(w / 2 + 0.04, y, z, true);
+                    placeWindow(-w / 2 - 0.04, y, z, true);
+                }
+            }
+        }
+
+        // Main door oriented toward nearest road
+        const roadPoint = this._closestRoadPoint({ x: building.position.x, z: building.position.z });
+        const dx = roadPoint.x - building.position.x;
+        const dz = roadPoint.z - building.position.z;
+        const door = BABYLON.MeshBuilder.CreateBox(`door-${building.name}`, {
+            width: 0.9,
+            height: 2.05,
+            depth: 0.08
+        }, this.scene);
+        door.parent = building;
+        door.material = doorMat;
+
+        if (Math.abs(dx) >= Math.abs(dz)) {
+            const side = dx >= 0 ? 1 : -1;
+            door.position = new BABYLON.Vector3((w / 2 + 0.05) * side, -h / 2 + 1.02, 0);
+            door.rotation.y = Math.PI / 2;
+        } else {
+            const side = dz >= 0 ? 1 : -1;
+            door.position = new BABYLON.Vector3(0, -h / 2 + 1.02, (d / 2 + 0.05) * side);
+            door.rotation.y = 0;
+        }
+
+        // Roof details: parapet + technical units (AC / local equipment)
+        if (type === 'Apartment') {
+            const parapetThickness = 0.15;
+            const parapetHeight = 0.28;
+            const topY = h / 2 + parapetHeight / 2;
+
+            const north = BABYLON.MeshBuilder.CreateBox(`roof-parapet-n-${building.name}`, {
+                width: w + parapetThickness * 2,
+                height: parapetHeight,
+                depth: parapetThickness
+            }, this.scene);
+            north.parent = building;
+            north.position = new BABYLON.Vector3(0, topY, d / 2 + parapetThickness / 2);
+            north.material = roofMat;
+
+            const south = north.clone(`roof-parapet-s-${building.name}`);
+            south.parent = building;
+            south.position = new BABYLON.Vector3(0, topY, -d / 2 - parapetThickness / 2);
+
+            const east = BABYLON.MeshBuilder.CreateBox(`roof-parapet-e-${building.name}`, {
+                width: parapetThickness,
+                height: parapetHeight,
+                depth: d + parapetThickness * 2
+            }, this.scene);
+            east.parent = building;
+            east.position = new BABYLON.Vector3(w / 2 + parapetThickness / 2, topY, 0);
+            east.material = roofMat;
+
+            const west = east.clone(`roof-parapet-w-${building.name}`);
+            west.parent = building;
+            west.position = new BABYLON.Vector3(-w / 2 - parapetThickness / 2, topY, 0);
+
+            const equipmentCount = 1 + (seed % 3);
+            for (let i = 0; i < equipmentCount; i++) {
+                const unit = BABYLON.MeshBuilder.CreateBox(`roof-unit-${building.name}-${i}`, {
+                    width: 0.8,
+                    height: 0.45,
+                    depth: 0.6
+                }, this.scene);
+                unit.parent = building;
+                unit.position = new BABYLON.Vector3(
+                    -w * 0.25 + i * 0.9,
+                    h / 2 + 0.25,
+                    -d * 0.2 + (i % 2) * 0.8
+                );
+                unit.material = roofMat;
+            }
+
+            if (seed % 2 === 0) {
+                const ac = BABYLON.MeshBuilder.CreateBox(`roof-ac-${building.name}`, {
+                    width: 0.65,
+                    height: 0.4,
+                    depth: 0.5
+                }, this.scene);
+                ac.parent = building;
+                ac.position = new BABYLON.Vector3(w * 0.22, h / 2 + 0.22, d * 0.18);
+                ac.material = roofMat;
+            }
+        } else {
+            const ridge = BABYLON.MeshBuilder.CreateBox(`roof-ridge-${building.name}`, {
+                width: w + 0.2,
+                height: 0.35,
+                depth: 0.35
+            }, this.scene);
+            ridge.parent = building;
+            ridge.position = new BABYLON.Vector3(0, h / 2 + 0.16, 0);
+            ridge.material = roofMat;
+        }
+    }
+
     createBuildings() {
         const clusters = [
             { x: -35, z: -35, type: 'Apartment', count: 18 },
@@ -183,8 +373,11 @@ export class NetworkModel {
                     eligible: false,
                     status: 'UNKNOWN',
                     reason: '',
-                    type: type
+                    type: type,
+                    dimensions: { w, d, h }
                 };
+
+                this._decorateBuilding(b, type, totalCount);
 
                 this.shadowGenerator.addShadowCaster(b);
                 this.equipments.buildings.push(b);
