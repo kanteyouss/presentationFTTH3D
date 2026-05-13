@@ -38,16 +38,30 @@ function dist2d(a, b) {
     return Math.sqrt(dx * dx + dz * dz);
 }
 
+function projectPointToSegment(point, segment) {
+    const ax = segment.from.x;
+    const az = segment.from.z;
+    const bx = segment.to.x;
+    const bz = segment.to.z;
+
+    const abx = bx - ax;
+    const abz = bz - az;
+    const apx = point.x - ax;
+    const apz = point.z - az;
+    const abLenSq = abx * abx + abz * abz;
+
+    if (abLenSq === 0) return { x: ax, z: az };
+    const t = Math.max(0, Math.min(1, (apx * abx + apz * abz) / abLenSq));
+    return { x: ax + abx * t, z: az + abz * t };
+}
+
 function closestRoadSegment(point) {
     let bestSegment = ROAD_SEGMENTS[0];
     let bestDistance = Infinity;
 
     ROAD_SEGMENTS.forEach(segment => {
-        const midPoint = {
-            x: (segment.from.x + segment.to.x) / 2,
-            z: (segment.from.z + segment.to.z) / 2
-        };
-        const distance = dist2d(point, midPoint);
+        const projected = projectPointToSegment(point, segment);
+        const distance = dist2d(point, projected);
         if (distance < bestDistance) {
             bestDistance = distance;
             bestSegment = segment;
@@ -57,6 +71,52 @@ function closestRoadSegment(point) {
     return bestSegment;
 }
 
+function generatePBOPositions(buildings, sroPositions, homesPerPbo = 10) {
+    const zones = sroPositions.map((sro, sroId) => ({ sroId, sro, buildings: [] }));
+
+    buildings.forEach(b => {
+        let nearest = 0;
+        let nearestDist = Infinity;
+        sroPositions.forEach((sro, idx) => {
+            const d = dist2d({ x: b.position.x, z: b.position.z }, sro);
+            if (d < nearestDist) {
+                nearestDist = d;
+                nearest = idx;
+            }
+        });
+        zones[nearest].buildings.push({ x: b.position.x, z: b.position.z });
+    });
+
+    const pboPositions = [];
+    zones.forEach(zone => {
+        if (zone.buildings.length === 0) return;
+
+        const desiredPboCount = Math.max(1, Math.ceil(zone.buildings.length / homesPerPbo));
+        const sortedByAngle = [...zone.buildings].sort((a, b) => {
+            const aa = Math.atan2(a.z - zone.sro.z, a.x - zone.sro.x);
+            const ab = Math.atan2(b.z - zone.sro.z, b.x - zone.sro.x);
+            return aa - ab;
+        });
+
+        for (let i = 0; i < desiredPboCount; i++) {
+            const idx = Math.min(
+                sortedByAngle.length - 1,
+                Math.floor(((i + 0.5) * sortedByAngle.length) / desiredPboCount)
+            );
+            const seed = sortedByAngle[idx];
+            const nearRoad = closestRoadSegment(seed);
+            const snapped = projectPointToSegment(seed, nearRoad);
+
+            const tooClose = pboPositions.some(p => dist2d(p, snapped) < 8);
+            if (!tooClose) {
+                pboPositions.push({ x: snapped.x, z: snapped.z, sroId: zone.sroId });
+            }
+        }
+    });
+
+    return pboPositions;
+}
+
 // ============================================================
 // Network build
 // ============================================================
@@ -64,9 +124,11 @@ function initNetwork() {
     network.createBuildings();
 
     const nro = network.createNRO();
+    const sroMeshes = [];
 
     NETWORK_CONFIG.SRO_POSITIONS.forEach((pos, i) => {
         const sro = network.createSRO(pos, i);
+        sroMeshes.push(sro);
         // Transport cables follow roads at aerial height (8m = top of pole)
         // Transport cables follow roads underground (buried backbone)
         // use a small height (near ground) for routing; NetworkModel will offset
@@ -75,26 +137,24 @@ function initNetwork() {
         network.createCable(`transport-${i}`, points, 'transport');
     });
 
-    // (Removed legacy aerial feeder loops that started directly in the air from SRO)
+    const pboPositions = generatePBOPositions(
+        network.equipments.buildings,
+        NETWORK_CONFIG.SRO_POSITIONS,
+        NETWORK_CONFIG.PBO_HOMES_TARGET
+    );
 
-    // === 10 strategically placed PBOs around SRO zones ===
-    const PBO_POSITIONS = [
-        // Zone SRO-A (-10, -10)
-        { x: -25, z: -15, sroId: 0 },
-        { x: -5, z: -25, sroId: 0 },
-        { x: 5, z: -8, sroId: 0 },
-        // Zone SRO-B (30, -40)
-        { x: 15, z: -50, sroId: 1 },
-        { x: 35, z: -55, sroId: 1 },
-        { x: 45, z: -35, sroId: 1 },
-        // Zone SRO-C (-30, 35)
-        { x: -45, z: 30, sroId: 2 },
-        { x: -30, z: 50, sroId: 2 },
-        { x: -10, z: 40, sroId: 2 },
-        { x: -50, z: 45, sroId: 2 }
+    const extraPboPositions = [
+        { x: 65, z: 55, sroId: 3 },
+        { x: 50, z: 60, sroId: 3 }
     ];
+    pboPositions.push(...extraPboPositions);
 
-    PBO_POSITIONS.forEach((pboPos, idx) => {
+    const pboCountBySro = new Map();
+    pboPositions.forEach(p => {
+        pboCountBySro.set(p.sroId, (pboCountBySro.get(p.sroId) || 0) + 1);
+    });
+
+    pboPositions.forEach((pboPos, idx) => {
         // Create a real pole for each PBO (height 8m)
         const pd = network.createPole({ x: pboPos.x, z: pboPos.z }, 8);
         const pbo = network.createPBO(pd, `pbo-${idx}`);
@@ -116,8 +176,18 @@ function initNetwork() {
         network.createCable(`pbo-feeder-${idx}`, path, 'distribution');
     });
 
-    // Dynamic eligibility: SRO radius 50m, PBO threshold 300m
-    network.computeEligibility(50, 300);
+    sroMeshes.forEach((sro, idx) => {
+        sro.metadata = {
+            ...(sro.metadata || {}),
+            pboCount: pboCountBySro.get(idx) || 0
+        };
+    });
+
+    // Dynamic eligibility with realistic capillary threshold
+    network.computeEligibility(
+        NETWORK_CONFIG.SRO_COVERAGE_RADIUS,
+        NETWORK_CONFIG.PBO_ELIGIBILITY_RADIUS
+    );
 
     const stats = {
         eligible: network.equipments.buildings.filter(b => b.metadata.status === 'ELIGIBLE').length,

@@ -202,16 +202,26 @@ export class NetworkModel {
      * @param {number} pboThreshold – max distance to a PBO for eligibility (default 300, per spec)
      */
     computeEligibility(sroRadius = 50, pboThreshold = 300) {
+        this.lastEligibilityConfig = { sroRadius, pboThreshold };
+        const sroStats = this.equipments.sros.map(() => ({
+            coveredBuildings: 0,
+            estimatedSubscribers: 0
+        }));
+
         this.equipments.buildings.forEach(b => {
             // 1. Check SRO coverage
             let inSroCoverage = false;
             let nearestSroDist = Infinity;
-            this.equipments.sros.forEach(s => {
+            let nearestSroIndex = -1;
+            this.equipments.sros.forEach((s, idx) => {
                 const d = BABYLON.Vector3.Distance(
                     new BABYLON.Vector3(b.position.x, 0, b.position.z),
                     new BABYLON.Vector3(s.position.x, 0, s.position.z)
                 );
-                if (d < nearestSroDist) nearestSroDist = d;
+                if (d < nearestSroDist) {
+                    nearestSroDist = d;
+                    nearestSroIndex = idx;
+                }
                 if (d <= sroRadius) inSroCoverage = true;
             });
 
@@ -228,14 +238,19 @@ export class NetworkModel {
 
             b.metadata._nearestSroDist = nearestSroDist;
             b.metadata._nearestPboDist = nearestPboDist;
+            b.metadata._nearestSroIndex = nearestSroIndex;
+            b.metadata._inSroCoverage = inSroCoverage;
 
-            // Determine status
-            if (inSroCoverage && nearestPboDist <= pboThreshold) {
+            // Determine status (FTTH field logic):
+            // - Close to a PBO => eligible (drop can be provisioned)
+            // - In SRO zone but too far from PBO => waiting for capillary extension
+            // - Outside SRO zone and no nearby PBO => non-eligible
+            if (nearestPboDist <= pboThreshold) {
                 b.metadata.status = 'ELIGIBLE';
                 b.metadata.eligible = true;
                 b.metadata.reason = '';
-            } else if (inSroCoverage && nearestPboDist > pboThreshold) {
-                b.metadata.status = 'NON_ELIGIBLE';
+            } else if (inSroCoverage) {
+                b.metadata.status = 'WAITING';
                 b.metadata.eligible = false;
                 b.metadata.reason = `Distance au PBO trop importante (${Math.round(nearestPboDist)}m > seuil ${pboThreshold}m)`;
             } else {
@@ -243,55 +258,50 @@ export class NetworkModel {
                 b.metadata.eligible = false;
                 b.metadata.reason = `Hors zone de couverture SRO (distance: ${Math.round(nearestSroDist)}m)`;
             }
-        });
 
-        const targetNonEligibleCount = 2;
-        const sortedBuildings = [...this.equipments.buildings].sort((a, b) => {
-            const distA = a.metadata._nearestSroDist ?? Infinity;
-            const distB = b.metadata._nearestSroDist ?? Infinity;
-            return distB - distA;
-        });
-
-        const alreadyNonEligible = sortedBuildings.filter(b => b.metadata.status === 'NON_ELIGIBLE');
-        let nonEligibleCount = 0;
-
-        alreadyNonEligible.forEach(b => {
-            if (nonEligibleCount < targetNonEligibleCount) {
-                b.metadata.status = 'NON_ELIGIBLE';
-                b.metadata.eligible = false;
-                if (!b.metadata.reason) {
-                    b.metadata.reason = 'Bâtiment trop éloigné du SRO / PBO.';
-                }
-                nonEligibleCount++;
-            } else {
-                b.metadata.status = 'ELIGIBLE';
-                b.metadata.eligible = true;
-                b.metadata.reason = '';
+            if (inSroCoverage && nearestSroIndex >= 0) {
+                sroStats[nearestSroIndex].coveredBuildings += 1;
+                sroStats[nearestSroIndex].estimatedSubscribers += b.metadata.type === 'Apartment' ? 6 : 2;
             }
         });
 
-        for (const b of sortedBuildings) {
-            if (nonEligibleCount >= targetNonEligibleCount) break;
-            if (b.metadata.status === 'ELIGIBLE') {
+        // Keep at least 2 red buildings for the final diagnostic stage.
+        const nonEligible = this.equipments.buildings.filter(b => b.metadata.status === 'NON_ELIGIBLE');
+        if (nonEligible.length === 0 && this.equipments.buildings.length > 0) {
+            const candidates = [...this.equipments.buildings].sort((a, b) => {
+                const pboDelta = (b.metadata._nearestPboDist ?? 0) - (a.metadata._nearestPboDist ?? 0);
+                if (pboDelta !== 0) return pboDelta;
+                return (b.metadata._nearestSroDist ?? 0) - (a.metadata._nearestSroDist ?? 0);
+            });
+
+            let forced = 0;
+            for (const b of candidates) {
+                if (forced >= 2) break;
                 b.metadata.status = 'NON_ELIGIBLE';
                 b.metadata.eligible = false;
-                b.metadata.reason = 'Bâtiment isolé : trop éloigné du SRO.';
-                nonEligibleCount++;
+                b.metadata.reason = `Bâtiment trop éloigné du PBO (${Math.round(b.metadata._nearestPboDist || 0)}m).`;
+                forced++;
             }
         }
 
         this.equipments.buildings.forEach(b => {
-            if (b.metadata.status !== 'NON_ELIGIBLE') {
-                b.metadata.status = 'ELIGIBLE';
-                b.metadata.eligible = true;
-                b.metadata.reason = '';
-            }
             delete b.metadata._nearestSroDist;
             delete b.metadata._nearestPboDist;
+            delete b.metadata._nearestSroIndex;
+            delete b.metadata._inSroCoverage;
+        });
+
+        this.equipments.sros.forEach((sro, idx) => {
+            sro.metadata = {
+                ...(sro.metadata || {}),
+                coverageRadius: sroRadius,
+                coveredBuildings: sroStats[idx].coveredBuildings,
+                estimatedSubscribers: sroStats[idx].estimatedSubscribers
+            };
         });
     }
 
-    createCoverageCircle(pos, radius = 35) {
+    createCoverageCircle(pos, radius = 50) {
         const disc = BABYLON.MeshBuilder.CreateDisc(`coverageDisc-${pos.x}`, {
             radius: radius,
             tessellation: 64
@@ -354,7 +364,6 @@ export class NetworkModel {
             else if (mode === 'eligibility') {
                 if (b.metadata.status === 'NON_ELIGIBLE') {
                     b.material.diffuseColor = BABYLON.Color3.FromHexString(COLORS.NON_ELIGIBLE);
-                    console.log('PAINTING RED:', b.name);
                 }
                 else if (b.metadata.status === 'WAITING') b.material.diffuseColor = BABYLON.Color3.FromHexString(COLORS.WAITING);
                 else {
@@ -587,7 +596,7 @@ export class NetworkModel {
 
     updateVisibilityForStep(stepIndex) {
         this.setAnalysisMode(
-            stepIndex === 0 ? 'density' : (stepIndex === 1 || stepIndex >= 6 ? 'eligibility' : 'normal')
+            stepIndex === 0 ? 'density' : (stepIndex >= 6 ? 'eligibility' : 'normal')
         );
 
         if (this.equipments.nro) {

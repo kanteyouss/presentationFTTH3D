@@ -79,6 +79,7 @@ export const NETWORK_CONFIG = {
     SRO_POSITIONS: [
         { id: 'SRO-A', x: -10, z: -10, subscribers: 450, type: 'ZMD' },
         { id: 'SRO-B', x: 30, z: -40, subscribers: 280, type: 'ZMD' },
-        { id: 'SRO-C', x: -30, z: 35, subscribers: 520, type: 'ZTD' }
+        { id: 'SRO-C', x: -30, z: 35, subscribers: 520, type: 'ZTD' },
+        { id: 'SRO-D', x: 55, z: 45, subscribers: 350, type: 'ZMD' }
     ]
 };
