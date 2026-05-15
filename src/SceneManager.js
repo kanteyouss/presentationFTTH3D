@@ -131,8 +131,142 @@ export class SceneManager {
             road.material = roadMat;
             road.receiveShadows = true;
 
+            this.createRoadMarkings(road, r, distance);
+
             // Add some street props along the roads
             if (r.type === 'main') this.createStreetProps(r);
+        });
+
+        this.createIntersectionMarkings();
+    }
+
+    createRoadMarkings(roadMesh, roadDef, distance) {
+        const markingMat = new BABYLON.StandardMaterial(`markingMat-${roadDef.from.x}-${roadDef.from.z}`, this.scene);
+        markingMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+        markingMat.emissiveColor = new BABYLON.Color3(0.18, 0.18, 0.18);
+        markingMat.specularColor = new BABYLON.Color3(0, 0, 0);
+
+        const surfaceLift = 0.02;
+
+        const makeStripe = (offset, stripeLength, stripeWidth, index, alongOffset = 0) => {
+            const stripe = BABYLON.MeshBuilder.CreatePlane(`stripe-${roadDef.from.x}-${roadDef.from.z}-${offset}-${index}`, {
+                width: stripeWidth,
+                height: stripeLength
+            }, this.scene);
+            stripe.parent = roadMesh;
+            stripe.position = new BABYLON.Vector3(offset, alongOffset, surfaceLift);
+            stripe.material = markingMat;
+        };
+
+        // Edge lines for all roads
+        const edgeOffset = roadDef.width * 0.46;
+        makeStripe(edgeOffset, distance, 0.16, 0);
+        makeStripe(-edgeOffset, distance, 0.16, 1);
+
+        // Main axes: central and lane separation
+        if (roadDef.type === 'main') {
+            const dashLength = 3.2;
+            const gap = 2.2;
+            const period = dashLength + gap;
+            const dashCount = Math.max(1, Math.floor(distance / period));
+
+            for (let i = 0; i < dashCount; i++) {
+                const t = (i + 0.5) / dashCount;
+                const along = -distance / 2 + t * distance;
+
+                const centerDash = BABYLON.MeshBuilder.CreatePlane(`center-dash-${roadDef.from.x}-${roadDef.from.z}-${i}`, {
+                    width: 0.18,
+                    height: Math.min(dashLength, distance / dashCount * 0.7)
+                }, this.scene);
+                centerDash.parent = roadMesh;
+                centerDash.position = new BABYLON.Vector3(0, along, surfaceLift + 0.001);
+                centerDash.material = markingMat;
+            }
+
+            // Light lane separators to suggest 2x2 lanes
+            const laneOffset = roadDef.width * 0.22;
+            const laneCount = Math.max(1, Math.floor(distance / (period * 1.1)));
+            for (let i = 0; i < laneCount; i++) {
+                const t = (i + 0.5) / laneCount;
+                const along = -distance / 2 + t * distance;
+
+                const left = BABYLON.MeshBuilder.CreatePlane(`lane-left-${roadDef.from.x}-${roadDef.from.z}-${i}`, {
+                    width: 0.12,
+                    height: Math.min(2.2, distance / laneCount * 0.6)
+                }, this.scene);
+                left.parent = roadMesh;
+                left.position = new BABYLON.Vector3(laneOffset, along, surfaceLift + 0.001);
+                left.material = markingMat;
+
+                const right = left.clone(`lane-right-${roadDef.from.x}-${roadDef.from.z}-${i}`);
+                right.parent = roadMesh;
+                right.position = new BABYLON.Vector3(-laneOffset, along, surfaceLift + 0.001);
+            }
+        }
+    }
+
+    createIntersectionMarkings() {
+        const roadAngle = (from, to) => Math.atan2(to.x - from.x, to.z - from.z);
+        const mainRoadA = roadAngle({ x: -75, z: 0 }, { x: 75, z: 10 });
+        const mainRoadB = roadAngle({ x: 0, z: -75 }, { x: -10, z: 75 });
+
+        const crossings = [
+            { x: -5, z: 5, angle: mainRoadA },
+            { x: -5, z: 35, angle: mainRoadA },
+            { x: -5, z: -35, angle: mainRoadA },
+            { x: -35, z: 5, angle: mainRoadB },
+            { x: 47, z: 5, angle: mainRoadB }
+        ];
+
+        const stopBars = [
+            { x: -14, z: 5, angle: -Math.PI / 2 },
+            { x: 6, z: 5, angle: Math.PI / 2 },
+            { x: -5, z: 13, angle: 0 },
+            { x: -5, z: -3, angle: Math.PI }
+        ];
+
+        const markingMat = new BABYLON.StandardMaterial('intersectionMarkingMat', this.scene);
+        markingMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+        markingMat.emissiveColor = new BABYLON.Color3(0.18, 0.18, 0.18);
+        markingMat.specularColor = new BABYLON.Color3(0, 0, 0);
+
+        crossings.forEach((c, idx) => {
+            const stripeCount = 6;
+            for (let i = 0; i < stripeCount; i++) {
+                const stripe = BABYLON.MeshBuilder.CreatePlane(`crosswalk-${idx}-${i}`, {
+                    width: 0.45,
+                    height: 2.3
+                }, this.scene);
+                const lateral = (i - (stripeCount - 1) / 2) * 0.72;
+                stripe.position = new BABYLON.Vector3(
+                    c.x + lateral * Math.cos(c.angle),
+                    0.074,
+                    c.z - lateral * Math.sin(c.angle)
+                );
+                stripe.rotation.x = Math.PI / 2;
+                stripe.rotation.z = c.angle;
+                stripe.material = markingMat;
+            }
+        });
+
+        stopBars.forEach((s, idx) => {
+            const bar = BABYLON.MeshBuilder.CreatePlane(`stop-bar-${idx}`, {
+                width: 0.35,
+                height: 3.2
+            }, this.scene);
+            bar.position = new BABYLON.Vector3(s.x, 0.074, s.z);
+            bar.rotation.x = Math.PI / 2;
+            bar.rotation.z = s.angle;
+            bar.material = markingMat;
+
+            const arrow = BABYLON.MeshBuilder.CreateDisc(`dir-arrow-${idx}`, {
+                radius: 0.48,
+                tessellation: 3
+            }, this.scene);
+            arrow.position = new BABYLON.Vector3(s.x, 0.075, s.z + 1.6 * Math.cos(s.angle));
+            arrow.rotation.x = Math.PI / 2;
+            arrow.rotation.z = s.angle;
+            arrow.material = markingMat;
         });
     }
 

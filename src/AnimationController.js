@@ -14,16 +14,8 @@ export class AnimationController {
         if (stepIndex === this.currentStep) return;
         this.currentStep = stepIndex;
 
-        // Trigger Cinematic Camera
-        const stage = STAGES[stepIndex];
-        if (stage && stage.camera && this.sceneManager) {
-            this.sceneManager.animateCamera(
-                stage.camera.target,
-                stage.camera.radius,
-                stage.camera.alpha,
-                stage.camera.beta
-            );
-        }
+        // Cinematic Camera is now entirely handled by CameraController.js
+        // via UIManager, so we do not call sceneManager.animateCamera here.
 
         this.updateVisibility();
         if (this.onStepChange) this.onStepChange(stepIndex);

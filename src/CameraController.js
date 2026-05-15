@@ -8,49 +8,49 @@ const STAGE_CAMS = [
     {
         // 0 – SIG Analysis: aerial sweep
         target: { x: 0, y: 0, z: 0 },
-        radius: 85, alpha: -Math.PI / 4, beta: 0.55,
+        radius: 100, alpha: -Math.PI / 4, beta: 0.55,
         orbitSpeed: 0.0003, orbitEnabled: true,
         label: 'Vue aérienne SIG – Analyse de densité'
     },
     {
         // 1 – Operator decision: slow tilt down
         target: { x: 5, y: 0, z: 5 },
-        radius: 65, alpha: -Math.PI / 3, beta: 0.75,
+        radius: 80, alpha: -Math.PI / 3, beta: 0.75,
         orbitSpeed: 0, orbitEnabled: false,
         label: 'Décision Opérateur – Architecture ZMD/ZTD'
     },
     {
         // 2 – NRO: tight zoom with slow orbit
-        target: { x: -60, y: 2, z: -50 },
-        radius: 18, alpha: -Math.PI / 1.4, beta: Math.PI / 3.5,
+        target: { x: -68, y: 3, z: -58 },
+        radius: 20, alpha: -Math.PI / 1.4, beta: Math.PI / 3.5,
         orbitSpeed: 0.0006, orbitEnabled: true,
         label: 'NRO – Cœur du réseau FTTH'
     },
     {
         // 3 – Transport: tracking along main artery
-        target: { x: -20, y: 0, z: -15 },
-        radius: 45, alpha: -Math.PI / 2.2, beta: Math.PI / 3.8,
+        target: { x: -5, y: 0, z: 5 },
+        radius: 50, alpha: -Math.PI / 2.2, beta: Math.PI / 3.8,
         orbitSpeed: 0.0002, orbitEnabled: true,
         label: 'Câbles Transport – Axes principaux'
     },
     {
         // 4 – SRO: hover over first SRO with slow turn
-        target: { x: -10, y: 1, z: -10 },
-        radius: 22, alpha: -Math.PI / 2.8, beta: Math.PI / 3.5,
+        target: { x: -10, y: 1.5, z: -10 },
+        radius: 26, alpha: -Math.PI / 2.8, beta: Math.PI / 3.5,
         orbitSpeed: 0.0007, orbitEnabled: true,
         label: 'SRO – Zone de couverture locale'
     },
     {
-        // 5 – Distribution: street-level tracking
-        target: { x: 20, y: 0, z: 20 },
-        radius: 32, alpha: -Math.PI / 2, beta: Math.PI / 3.2,
+        // 5 – Distribution: street-level tracking (Intersection L_TOP)
+        target: { x: -35, y: 0, z: 35 },
+        radius: 36, alpha: -Math.PI / 2, beta: Math.PI / 3.2,
         orbitSpeed: 0.0002, orbitEnabled: true,
         label: 'Câbles Distribution – Liaisons quartier'
     },
     {
-        // 6 – PBO: tight focus on pole zone
-        target: { x: 5, y: 5, z: 5 },
-        radius: 14, alpha: -Math.PI / 1.8, beta: Math.PI / 3.2,
+        // 6 – PBO: tight focus on pole zone (Specific extra PBO)
+        target: { x: 65, y: 6.5, z: 55 },
+        radius: 16, alpha: -Math.PI / 1.8, beta: Math.PI / 3.2,
         orbitSpeed: 0.0008, orbitEnabled: true,
         label: "PBO – Bilan d'éligibilité final"
     }
@@ -106,6 +106,12 @@ export class CameraController {
     // --------------------------------------------------------
 
     _animateTo(cfg, duration = 2000) {
+        // Stop any currently running animations on the camera to prevent stuttering
+        this.scene.stopAnimation(this.camera);
+        if (this.camera.animations) {
+            this.camera.animations = [];
+        }
+
         const fps = 60;
         const frames = Math.round(fps * (duration / 1000));
         const ease = new BABYLON.CubicEase();
