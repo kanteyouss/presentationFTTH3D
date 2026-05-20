@@ -14,6 +14,9 @@ const network = new NetworkModel(sceneMgr.scene, sceneMgr.shadowGenerator);
 // Cinematic camera controller
 const camerCtrl = new CameraController(sceneMgr.camera, sceneMgr.scene, canvas);
 
+// Donner accès à networkModel pour ciblage dynamique à l'étape 7
+camerCtrl.networkModel = network;
+
 // Animation controller gets sceneManager for legacy compatibility
 const animController = new AnimationController(sceneMgr.scene, network, sceneMgr);
 

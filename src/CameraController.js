@@ -53,6 +53,13 @@ const STAGE_CAMS = [
         radius: 16, alpha: -Math.PI / 1.8, beta: Math.PI / 3.2,
         orbitSpeed: 0.0008, orbitEnabled: true,
         label: "PBO – Bilan d'éligibilité final"
+    },
+    {
+        // 7 – Non-eligible building: dynamically adjusted in goToStage()
+        target: { x: -35, y: 2, z: -35 },
+        radius: 18, alpha: -Math.PI / 2.2, beta: Math.PI / 3,
+        orbitSpeed: 0.0004, orbitEnabled: true,
+        label: 'Bâtiment Non-Éligible – Hors couverture capillaire'
     }
 ];
 
@@ -68,6 +75,7 @@ export class CameraController {
         this.canvas = canvas;
 
         this.currentStage = -1;
+        this.networkModel = null;
         this._orbitObserver = null;
         this._userTookControl = false;
         this._orbitAngle = this.camera.alpha;
@@ -85,7 +93,20 @@ export class CameraController {
         if (!cfg) return;
         this.currentStage = index;
         this._userTookControl = false;
-        this._animateTo(cfg);
+        // À l'étape 7, dynamiquement cibler un bâtiment NON_ELIGIBLE
+        let targetCfg = { ...cfg };
+        if (index === 7 && this.networkModel) {
+            const nonEligibleBuilding = this.networkModel.getNonEligibleBuilding();
+            if (nonEligibleBuilding) {
+                const height = nonEligibleBuilding.metadata.dimensions?.h || 2;
+                targetCfg = {
+                    ...cfg,
+                    target: { x: nonEligibleBuilding.position.x, y: height + 2, z: nonEligibleBuilding.position.z }
+                };
+            }
+        }
+
+        this._animateTo(targetCfg);
         this._stopOrbit();
 
         if (cfg.orbitEnabled) {

@@ -548,6 +548,13 @@ export class NetworkModel {
         this._coverageDiscs = [];
     }
 
+    /**
+     * Retourne le premier bâtiment NON_ELIGIBLE trouvé
+     */
+    getNonEligibleBuilding() {
+        return this.equipments.buildings.find(b => b.metadata.status === 'NON_ELIGIBLE');
+    }
+
     setAnalysisMode(mode) {
         this.equipments.buildings.forEach((b, i) => {
             if (mode === 'density') {
