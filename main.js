@@ -23,6 +23,27 @@ const animController = new AnimationController(sceneMgr.scene, network, sceneMgr
 // UI gets camera controller for Resume button
 const ui = new UIManager(document.getElementById('app'), animController, camerCtrl);
 
+let pointerPinnedEquipment = null;
+sceneMgr.scene.constantlyUpdateMeshUnderPointer = true;
+
+// Show equipment image only on hover or click (NRO/SRO/PBO).
+sceneMgr.scene.onPointerObservable.add((pointerInfo) => {
+    if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
+        const pickInfo = sceneMgr.scene.pick(sceneMgr.scene.pointerX, sceneMgr.scene.pointerY);
+        const picked = pickInfo?.hit ? pickInfo.pickedMesh : null;
+        if (!pointerPinnedEquipment) {
+            network.previewEquipmentBadge(picked);
+        }
+        return;
+    }
+
+    if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERPICK) {
+        const pickInfo = sceneMgr.scene.pick(sceneMgr.scene.pointerX, sceneMgr.scene.pointerY);
+        const picked = pickInfo?.hit ? pickInfo.pickedMesh : null;
+        pointerPinnedEquipment = network.togglePinnedEquipmentBadge(picked);
+    }
+});
+
 // ============================================================
 // Road definitions (mirrors SceneManager road layout)
 // ============================================================

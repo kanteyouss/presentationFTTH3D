@@ -15,7 +15,7 @@ export class UIManager {
         overlay.id = 'ui-overlay';
         overlay.innerHTML = `
             <div class="panel">
-                <h1>🌐 FTTH Urban Deployment 3D</h1>
+                <h1>FTTH Urban Deployment</h1>
                 <p id="stage-name" class="stage-name">${STAGES[0].name}</p>
                 <p id="stage-desc">${STAGES[0].description}</p>
 
@@ -31,16 +31,6 @@ export class UIManager {
                     <button id="prev-btn" title="Précédent (←)">◀</button>
                     <button id="auto-btn" class="auto-btn" title="Lecture auto (Espace)">▶ Auto</button>
                     <button id="next-btn" class="primary" title="Suivant (→)">Suivant ▶</button>
-                </div>
-
-                <div class="view-controls">
-                    <button id="toggle-distribution-btn" class="view-toggle active" title="Afficher / masquer la distribution">Distribution</button>
-                    <button id="toggle-bundles-btn" class="view-toggle active" title="Afficher / masquer les bundles">Bundles</button>
-                    <button id="toggle-chambers-btn" class="view-toggle" title="Mettre en évidence les chambres saturées">Chambres saturées</button>
-                </div>
-
-                <div class="cam-controls">
-                    <button id="resume-cam-btn" title="Reprendre la caméra cinématique">🎥 Reprendre vue</button>
                 </div>
             </div>
         `;
@@ -63,16 +53,9 @@ export class UIManager {
         });
 
         // Navigation buttons
-        document.getElementById('next-btn').addEventListener('click', () => this._next());
-        document.getElementById('prev-btn').addEventListener('click', () => this._prev());
-        document.getElementById('auto-btn').addEventListener('click', () => this._toggleAutoPlay());
-        document.getElementById('toggle-distribution-btn').addEventListener('click', () => this._toggleDistribution());
-        document.getElementById('toggle-bundles-btn').addEventListener('click', () => this._toggleBundles());
-        document.getElementById('toggle-chambers-btn').addEventListener('click', () => this._toggleSaturatedChambers());
-        document.getElementById('resume-cam-btn').addEventListener('click', () => {
-            if (this.cam) this.cam.goToStage(this.controller.currentStep);
-            document.getElementById('resume-hint')?.classList.remove('visible');
-        });
+        document.getElementById('next-btn')?.addEventListener('click', () => this._next());
+        document.getElementById('prev-btn')?.addEventListener('click', () => this._prev());
+        document.getElementById('auto-btn')?.addEventListener('click', () => this._toggleAutoPlay());
 
         // Keyboard navigation — PowerPoint style
         document.addEventListener('keydown', (e) => {

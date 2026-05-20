@@ -1,6 +1,9 @@
 import * as BABYLON from 'babylonjs';
 import { COLORS, NETWORK_CONFIG } from './constants';
 import { routeCable } from './RoadRouter';
+import NRO_IMG from './image/NRO.png';
+import SRO_IMG from './image/SRO.png';
+import PBO_IMG from './image/PBO.png';
 
 export class NetworkModel {
     constructor(scene, shadowGenerator) {
@@ -17,6 +20,103 @@ export class NetworkModel {
         this._bundleRegistry = new Map();
         this._ductRegistry = new Map();
         this._chamberRegistry = new Map();
+        this._equipmentBadges = new Map();
+        this._pinnedEquipment = null;
+    }
+
+    _badgeTextureForType(type) {
+        if (type === 'NRO') return NRO_IMG;
+        if (type === 'SRO') return SRO_IMG;
+        if (type === 'PBO') return PBO_IMG;
+        return null;
+    }
+
+    _badgeLayoutForType(type) {
+        if (type === 'NRO') return { width: 5.2, height: 3.0, yOffset: 4.2 };
+        if (type === 'SRO') return { width: 3.6, height: 2.2, yOffset: 2.8 };
+        return { width: 2.8, height: 1.8, yOffset: 2.0 }; // PBO default
+    }
+
+    _resolveEquipmentMesh(mesh) {
+        if (!mesh) return null;
+
+        // Walk up parent chain in case the user points a child mesh.
+        let current = mesh;
+        while (current) {
+            const type = current.metadata?.equipmentType;
+            if (type === 'NRO' || type === 'SRO' || type === 'PBO') {
+                return current;
+            }
+            current = current.parent;
+        }
+        return null;
+    }
+
+    _ensureEquipmentBadge(mesh) {
+        if (!mesh) return null;
+        if (this._equipmentBadges.has(mesh.uniqueId)) {
+            return this._equipmentBadges.get(mesh.uniqueId);
+        }
+
+        const type = mesh.metadata?.equipmentType;
+        const textureUrl = this._badgeTextureForType(type);
+        const layout = this._badgeLayoutForType(type);
+        if (!textureUrl) return null;
+
+        const badge = BABYLON.MeshBuilder.CreatePlane(`badge-${mesh.name}`, {
+            width: layout.width,
+            height: layout.height
+        }, this.scene);
+        badge.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+        badge.isPickable = false;
+        badge.parent = mesh;
+        badge.position = new BABYLON.Vector3(0, layout.yOffset, 0);
+
+        const mat = new BABYLON.StandardMaterial(`badge-mat-${mesh.name}`, this.scene);
+        mat.diffuseTexture = new BABYLON.Texture(textureUrl, this.scene);
+        mat.diffuseTexture.hasAlpha = true;
+        mat.useAlphaFromDiffuseTexture = true;
+        mat.emissiveColor = BABYLON.Color3.White().scale(0.45);
+        mat.backFaceCulling = false;
+        badge.material = mat;
+        badge.visibility = 0;
+
+        this._equipmentBadges.set(mesh.uniqueId, badge);
+        return badge;
+    }
+
+    _showOnlyBadge(mesh) {
+        this._equipmentBadges.forEach(badge => {
+            badge.visibility = 0;
+        });
+        if (!mesh) return;
+        const badge = this._ensureEquipmentBadge(mesh);
+        if (badge) badge.visibility = 1;
+    }
+
+    previewEquipmentBadge(mesh) {
+        if (this._pinnedEquipment) return;
+        const eq = this._resolveEquipmentMesh(mesh);
+        this._showOnlyBadge(eq);
+    }
+
+    togglePinnedEquipmentBadge(mesh) {
+        const eq = this._resolveEquipmentMesh(mesh);
+        if (!eq) {
+            this._pinnedEquipment = null;
+            this._showOnlyBadge(null);
+            return null;
+        }
+
+        if (this._pinnedEquipment && this._pinnedEquipment.uniqueId === eq.uniqueId) {
+            this._pinnedEquipment = null;
+            this._showOnlyBadge(null);
+            return null;
+        }
+
+        this._pinnedEquipment = eq;
+        this._showOnlyBadge(eq);
+        return eq;
     }
 
     _getOrCreateMat(name, hexColor) {
@@ -579,6 +679,8 @@ export class NetworkModel {
     createNRO() {
         const nro = BABYLON.MeshBuilder.CreateBox("nro", { width: 6, height: 4, depth: 6 }, this.scene);
         nro.position = new BABYLON.Vector3(NETWORK_CONFIG.NRO_POS.x, 2, NETWORK_CONFIG.NRO_POS.z);
+        nro.isPickable = true;
+        nro.metadata = { ...(nro.metadata || {}), equipmentType: 'NRO' };
 
         const mat = new BABYLON.StandardMaterial("nroMat", this.scene);
         mat.diffuseColor = BABYLON.Color3.FromHexString(COLORS.HUB);
@@ -588,6 +690,7 @@ export class NetworkModel {
         this.shadowGenerator.addShadowCaster(nro);
         this.equipments.nro = nro;
         nro.visibility = 0;
+        this._ensureEquipmentBadge(nro);
         return nro;
     }
 
@@ -595,7 +698,8 @@ export class NetworkModel {
         const model = NETWORK_CONFIG.SRO_POSITIONS.find(s => s.x === pos.x && s.z === pos.z);
         const sro = BABYLON.MeshBuilder.CreateBox(`sro-${id}`, { width: 1.2, height: 2.2, depth: 0.8 }, this.scene);
         sro.position = new BABYLON.Vector3(pos.x, 1.1, pos.z);
-        sro.metadata = model;
+        sro.isPickable = true;
+        sro.metadata = { ...(model || {}), equipmentType: 'SRO' };
 
         const mat = new BABYLON.StandardMaterial(`sroMat-${id}`, this.scene);
         mat.diffuseColor = BABYLON.Color3.FromHexString(COLORS.CABINET);
@@ -605,6 +709,7 @@ export class NetworkModel {
         this.shadowGenerator.addShadowCaster(sro);
         this.equipments.sros.push(sro);
         sro.visibility = 0;
+        this._ensureEquipmentBadge(sro);
         return sro;
     }
 
@@ -654,6 +759,8 @@ export class NetworkModel {
         const pbo = BABYLON.MeshBuilder.CreateBox(`pbo-${id}`, { width: 0.45, height: 0.55, depth: 0.35 }, this.scene);
         // Fixed on pole at bracket height — offset slightly in front of pole
         pbo.position = new BABYLON.Vector3(pos.x + 0.3, pboY, pos.z + 0.3);
+        pbo.isPickable = true;
+        pbo.metadata = { ...(pbo.metadata || {}), equipmentType: 'PBO' };
 
         const mat = new BABYLON.StandardMaterial(`pboMat-${id}`, this.scene);
         mat.diffuseColor = BABYLON.Color3.FromHexString(COLORS.BOX);
@@ -663,6 +770,7 @@ export class NetworkModel {
         this.shadowGenerator.addShadowCaster(pbo);
         pbo.visibility = 0;
         this.equipments.pbos.push(pbo);
+        this._ensureEquipmentBadge(pbo);
         return pbo;
     }
 
