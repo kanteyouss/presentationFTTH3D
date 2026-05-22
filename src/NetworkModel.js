@@ -55,6 +55,8 @@ export class NetworkModel {
     _ensureEquipmentBadge(mesh) {
         if (!mesh) return null;
         if (this._equipmentBadges.has(mesh.uniqueId)) {
+            // Debug: returning cached badge
+            // console.log(`[DEBUG] cached badge for ${mesh.name}`);
             return this._equipmentBadges.get(mesh.uniqueId);
         }
 
@@ -62,6 +64,9 @@ export class NetworkModel {
         const textureUrl = this._badgeTextureForType(type);
         const layout = this._badgeLayoutForType(type);
         if (!textureUrl) return null;
+
+        // Debug log badge creation to help track duplicate/alternate images
+        console.log('[DEBUG] creating badge for', mesh.name, 'type=', type, 'texture=', textureUrl);
 
         const badge = BABYLON.MeshBuilder.CreatePlane(`badge-${mesh.name}`, {
             width: layout.width,

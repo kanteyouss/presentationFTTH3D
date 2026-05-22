@@ -93,6 +93,16 @@ export class UIManager {
     }
 
     _goTo(stepIndex) {
+        // Close any open equipment modal and clear pinned equipment when changing stage
+        this.hideEquipmentModal();
+        try {
+            if (this.controller && this.controller.networkModel && typeof this.controller.networkModel.togglePinnedEquipmentBadge === 'function') {
+                this.controller.networkModel.togglePinnedEquipmentBadge(null);
+            }
+        } catch (e) {
+            // ignore
+        }
+
         this._stopAutoPlay();
         this.controller.setStep(stepIndex);
         if (this.cam) this.cam.goToStage(stepIndex);

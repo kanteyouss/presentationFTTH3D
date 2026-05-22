@@ -38,6 +38,8 @@ sceneMgr.scene.onPointerObservable.add((pointerInfo) => {
 
         // DOM hover preview (always update)
         const info = network.getEquipmentInfo(picked);
+        // Debug: show which image is used for hover
+        if (info) console.log('[DEBUG] hover ->', picked?.name, 'title=', info.title, 'image=', info.image);
         if (info) ui.showHoverEquipment(info.image, info.title, clientX, clientY);
         else ui.hideHoverEquipment();
         return;
@@ -49,6 +51,8 @@ sceneMgr.scene.onPointerObservable.add((pointerInfo) => {
         pointerPinnedEquipment = network.togglePinnedEquipmentBadge(picked);
 
         const info = network.getEquipmentInfo(picked);
+        // Debug: show which image is used for click/modal
+        if (info) console.log('[DEBUG] pick ->', picked?.name, 'title=', info.title, 'image=', info.image, 'pinned=', !!pointerPinnedEquipment);
         if (pointerPinnedEquipment && info) ui.showEquipmentModal(info.image, info.title);
         else ui.hideEquipmentModal();
     }
