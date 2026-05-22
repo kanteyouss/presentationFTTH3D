@@ -655,6 +655,30 @@ export class NetworkModel {
         return this.equipments.buildings.find(b => b.metadata.status === 'NON_ELIGIBLE');
     }
 
+    /**
+     * Retourne des informations d'affichage pour un mesh d'équipement (image, titre)
+     * @param {BABYLON.AbstractMesh|null} mesh
+     * @returns {{image: string, title: string, mesh: BABYLON.AbstractMesh}|null}
+     */
+    getEquipmentInfo(mesh) {
+        const eq = this._resolveEquipmentMesh(mesh);
+        if (!eq) return null;
+        const type = eq.metadata?.equipmentType;
+        const image = this._badgeTextureForType(type);
+        if (!image) return null;
+        let title = type || 'Equipment';
+        if (type === 'SRO') {
+            const m = eq.name.match(/sro-(\d+)/);
+            title = `SRO ${m ? m[1] : ''}`;
+        } else if (type === 'PBO') {
+            const m = eq.name.match(/pbo-(\d+)/);
+            title = `PBO ${m ? m[1] : ''}`;
+        } else if (type === 'NRO') {
+            title = 'NRO';
+        }
+        return { image, title, mesh: eq };
+    }
+
     setAnalysisMode(mode) {
         this.equipments.buildings.forEach((b, i) => {
             if (mode === 'density') {

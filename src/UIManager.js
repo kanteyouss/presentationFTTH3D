@@ -244,4 +244,62 @@ export class UIManager {
         }
         if (popup) popup.classList.remove('visible');
     }
+
+    // --- Equipment hover / modal helpers ---
+    showHoverEquipment(imageUrl, title, clientX = 0, clientY = 0) {
+        if (!this._hoverEl) {
+            const el = document.createElement('div');
+            el.id = 'equipment-preview';
+            el.innerHTML = `
+                <div class="preview-card">
+                    <img class="preview-img" src="" alt="equip">
+                    <div class="preview-title"></div>
+                </div>
+            `;
+            document.body.appendChild(el);
+            this._hoverEl = el;
+            this._hoverImg = el.querySelector('.preview-img');
+            this._hoverTitle = el.querySelector('.preview-title');
+        }
+        if (this._hoverImg.src !== imageUrl) this._hoverImg.src = imageUrl;
+        this._hoverTitle.textContent = title || '';
+        this._hoverEl.style.display = 'block';
+        this._hoverEl.style.left = `${clientX + 12}px`;
+        this._hoverEl.style.top = `${clientY + 12}px`;
+    }
+
+    hideHoverEquipment() {
+        if (this._hoverEl) this._hoverEl.style.display = 'none';
+    }
+
+    showEquipmentModal(imageUrl, title) {
+        if (!this._modalEl) {
+            const el = document.createElement('div');
+            el.id = 'equipment-modal';
+            el.innerHTML = `
+                <div class="modal-backdrop" id="equipment-modal-backdrop">
+                    <div class="modal-card">
+                        <button class="modal-close" id="equipment-modal-close">✕</button>
+                        <div class="modal-title"></div>
+                        <div class="modal-body"><img class="modal-img" src="" alt="equip"></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(el);
+            this._modalEl = el;
+            this._modalImg = el.querySelector('.modal-img');
+            this._modalTitle = el.querySelector('.modal-title');
+            el.querySelector('#equipment-modal-close').addEventListener('click', () => this.hideEquipmentModal());
+            el.querySelector('#equipment-modal-backdrop').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) this.hideEquipmentModal();
+            });
+        }
+        if (this._modalImg.src !== imageUrl) this._modalImg.src = imageUrl;
+        this._modalTitle.textContent = title || '';
+        this._modalEl.style.display = 'block';
+    }
+
+    hideEquipmentModal() {
+        if (this._modalEl) this._modalEl.style.display = 'none';
+    }
 }

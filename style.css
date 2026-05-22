@@ -290,3 +290,82 @@ button:disabled {
 .cam-controls button:hover {
     background: rgba(9, 132, 227, 0.22);
 }
+
+/* Equipment preview (hover) */
+#equipment-preview {
+    position: fixed;
+    pointer-events: none;
+    z-index: 120;
+    display: none;
+}
+#equipment-preview .preview-card {
+    background: rgba(12,12,20,0.9);
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 8px;
+    border-radius: 8px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+#equipment-preview .preview-img {
+    width: 128px;
+    height: auto;
+    max-height: 96px;
+    object-fit: contain;
+    display: block;
+}
+#equipment-preview .preview-title {
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* Equipment modal */
+#equipment-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: none;
+}
+#equipment-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+#equipment-modal .modal-card {
+    background: rgba(9,9,18,0.98);
+    border-radius: 12px;
+    padding: 16px;
+    max-width: 92vw;
+    max-height: 92vh;
+    overflow: auto;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.7);
+    position: relative;
+}
+#equipment-modal .modal-title {
+    color: var(--text-main);
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+#equipment-modal .modal-img {
+    max-width: 88vw;
+    max-height: 78vh;
+    display: block;
+    margin: 0 auto;
+}
+#equipment-modal .modal-close {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    cursor: pointer;
+}

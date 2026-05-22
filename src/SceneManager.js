@@ -48,17 +48,26 @@ export class SceneManager {
 
     setupLights() {
         const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), this.scene);
-        hemiLight.intensity = 0.5;
+        hemiLight.intensity = 0.35;
         hemiLight.diffuse = new BABYLON.Color3(1, 1, 1);
         hemiLight.specular = new BABYLON.Color3(1, 1, 1);
         hemiLight.groundColor = new BABYLON.Color3(0.1, 0.1, 0.2);
 
         const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), this.scene);
         dirLight.position = new BABYLON.Vector3(20, 40, 20);
-        dirLight.intensity = 0.8;
+        dirLight.intensity = 1.2;
 
-        this.shadowGenerator = new BABYLON.ShadowGenerator(1024, dirLight);
+        // Larger shadow map and tuned parameters for higher contrast and crisper shadows
+        this.shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
         this.shadowGenerator.useBlurExponentialShadowMap = true;
+        // soften/sharpen kernel (higher -> blurrier), tuned by testing
+        this.shadowGenerator.blurKernel = 8;
+        // enable poisson sampling for nicer soft edges on some platforms
+        this.shadowGenerator.usePoissonSampling = true;
+        // small bias to reduce shadow acne
+        this.shadowGenerator.bias = 0.0005;
+        // sometimes improves quality for thin geometry
+        this.shadowGenerator.forceBackFacesOnly = true;
     }
 
     setupEnvironment() {

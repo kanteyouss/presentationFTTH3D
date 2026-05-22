@@ -31,9 +31,15 @@ sceneMgr.scene.onPointerObservable.add((pointerInfo) => {
     if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
         const pickInfo = sceneMgr.scene.pick(sceneMgr.scene.pointerX, sceneMgr.scene.pointerY);
         const picked = pickInfo?.hit ? pickInfo.pickedMesh : null;
-        if (!pointerPinnedEquipment) {
-            network.previewEquipmentBadge(picked);
-        }
+        const clientX = pointerInfo.event?.clientX || (sceneMgr.canvas ? sceneMgr.canvas.clientWidth / 2 : 0);
+        const clientY = pointerInfo.event?.clientY || (sceneMgr.canvas ? sceneMgr.canvas.clientHeight / 2 : 0);
+
+        if (!pointerPinnedEquipment) network.previewEquipmentBadge(picked);
+
+        // DOM hover preview (always update)
+        const info = network.getEquipmentInfo(picked);
+        if (info) ui.showHoverEquipment(info.image, info.title, clientX, clientY);
+        else ui.hideHoverEquipment();
         return;
     }
 
@@ -41,6 +47,10 @@ sceneMgr.scene.onPointerObservable.add((pointerInfo) => {
         const pickInfo = sceneMgr.scene.pick(sceneMgr.scene.pointerX, sceneMgr.scene.pointerY);
         const picked = pickInfo?.hit ? pickInfo.pickedMesh : null;
         pointerPinnedEquipment = network.togglePinnedEquipmentBadge(picked);
+
+        const info = network.getEquipmentInfo(picked);
+        if (pointerPinnedEquipment && info) ui.showEquipmentModal(info.image, info.title);
+        else ui.hideEquipmentModal();
     }
 });
 
