@@ -309,9 +309,9 @@ button:disabled {
     box-shadow: 0 10px 30px rgba(0,0,0,0.6);
 }
 #equipment-preview .preview-img {
-    width: 128px;
+    width: 220px;
     height: auto;
-    max-height: 96px;
+    max-height: 160px;
     object-fit: contain;
     display: block;
 }
@@ -354,8 +354,8 @@ button:disabled {
     margin-bottom: 8px;
 }
 #equipment-modal .modal-img {
-    max-width: 88vw;
-    max-height: 78vh;
+    max-width: 96vw;
+    max-height: 90vh;
     display: block;
     margin: 0 auto;
 }

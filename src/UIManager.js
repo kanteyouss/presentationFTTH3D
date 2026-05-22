@@ -294,7 +294,29 @@ export class UIManager {
                 if (e.target === e.currentTarget) this.hideEquipmentModal();
             });
         }
-        if (this._modalImg.src !== imageUrl) this._modalImg.src = imageUrl;
+        // Reset any previous inline sizing
+        if (this._modalImg.src !== imageUrl) {
+            this._modalImg.style.width = '';
+            this._modalImg.onload = () => {
+                const natural = this._modalImg.naturalWidth || 0;
+                if (natural > 0) {
+                    // Aggressively upscale very small images for legibility,
+                    // but remain responsive and respect modal max widths.
+                    if (natural < 200) {
+                        this._modalImg.style.width = 'min(720px, 92vw)';
+                    } else if (natural < 800) {
+                        this._modalImg.style.width = 'min(640px, 92vw)';
+                    } else if (natural < 1200) {
+                        this._modalImg.style.width = 'min(520px, 88vw)';
+                    } else {
+                        this._modalImg.style.width = '';
+                    }
+                } else {
+                    this._modalImg.style.width = '';
+                }
+            };
+            this._modalImg.src = imageUrl;
+        }
         this._modalTitle.textContent = title || '';
         this._modalEl.style.display = 'block';
     }
