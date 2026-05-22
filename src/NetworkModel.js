@@ -550,7 +550,7 @@ export class NetworkModel {
             } else if (inSroCoverage) {
                 b.metadata.status = 'WAITING';
                 b.metadata.eligible = false;
-                b.metadata.reason = `Distance au PBO trop importante (${Math.round(nearestPboDist)}m > seuil ${pboThreshold}m)`;
+                // b.metadata.reason = `Distance au PBO trop importante (${Math.round(nearestPboDist)}m > seuil ${pboThreshold}m)`;
             } else {
                 b.metadata.status = 'NON_ELIGIBLE';
                 b.metadata.eligible = false;
@@ -577,7 +577,7 @@ export class NetworkModel {
                 if (forced >= 2) break;
                 b.metadata.status = 'NON_ELIGIBLE';
                 b.metadata.eligible = false;
-                b.metadata.reason = `Bâtiment trop éloigné du PBO (${Math.round(b.metadata._nearestPboDist || 0)}m).`;
+                // b.metadata.reason = `Bâtiment trop éloigné du PBO (${Math.round(b.metadata._nearestPboDist || 0)}m).`;
                 forced++;
             }
         }
