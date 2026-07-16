@@ -210,7 +210,7 @@ export class CameraController {
 
             if (moved && !this._userTookControl) {
                 // Check if the animation is still running (rough heuristic)
-                const anims = this.scene.getAnimationRatioToRef ? [] : this.scene.animatables;
+                const anims = this.scene.getAnimationRatioToRef ? this.scene.animatables : [];
                 const hasCamAnim = (anims || []).some(a => a.target === this.camera);
                 if (!hasCamAnim) {
                     this._userTookControl = true;

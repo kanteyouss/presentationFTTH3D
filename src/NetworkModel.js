@@ -1,5 +1,5 @@
 import * as BABYLON from 'babylonjs';
-import { COLORS, NETWORK_CONFIG } from './constants';
+import { COLORS, NETWORK_CONFIG, ROAD_SEGMENTS } from './constants';
 import { routeCable } from './RoadRouter';
 import NRO_IMG from './image/NRO.png';
 import SRO_IMG from './image/SRO.png';
@@ -264,14 +264,7 @@ export class NetworkModel {
     }
 
     _closestRoadPoint(point) {
-        const roads = [
-            { from: { x: -75, z: 0 }, to: { x: 75, z: 10 } },
-            { from: { x: 0, z: -75 }, to: { x: -10, z: 75 } },
-            { from: { x: -40, z: -75 }, to: { x: -30, z: 75 } },
-            { from: { x: 40, z: -75 }, to: { x: 50, z: 75 } },
-            { from: { x: -75, z: 30 }, to: { x: 75, z: 40 } },
-            { from: { x: -75, z: -30 }, to: { x: 75, z: -40 } }
-        ];
+        const roads = ROAD_SEGMENTS;
 
         let best = null;
         let bestDist = Infinity;
@@ -583,6 +576,10 @@ export class NetworkModel {
         }
 
         this.equipments.buildings.forEach(b => {
+            b.metadata.nearestSroDist = b.metadata._nearestSroDist;
+            b.metadata.nearestPboDist = b.metadata._nearestPboDist;
+            b.metadata.nearestSroIndex = b.metadata._nearestSroIndex;
+            b.metadata.inSroCoverage = b.metadata._inSroCoverage;
             delete b.metadata._nearestSroDist;
             delete b.metadata._nearestPboDist;
             delete b.metadata._nearestSroIndex;

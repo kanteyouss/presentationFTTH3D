@@ -5,7 +5,7 @@ import { NetworkModel } from './src/NetworkModel';
 import { AnimationController } from './src/AnimationController';
 import { CameraController } from './src/CameraController';
 import { UIManager } from './src/UIManager';
-import { NETWORK_CONFIG } from './src/constants';
+import { NETWORK_CONFIG, ROAD_SEGMENTS } from './src/constants';
 
 const canvas = document.getElementById('canvas');
 const sceneMgr = new SceneManager(canvas);
@@ -21,7 +21,7 @@ camerCtrl.networkModel = network;
 const animController = new AnimationController(sceneMgr.scene, network, sceneMgr);
 
 // UI gets camera controller for Resume button
-const ui = new UIManager(document.getElementById('app'), animController, camerCtrl);
+const ui = new UIManager(document.getElementById('ui-overlay'), animController, camerCtrl);
 
 let pointerPinnedEquipment = null;
 sceneMgr.scene.constantlyUpdateMeshUnderPointer = true;
@@ -36,10 +36,7 @@ sceneMgr.scene.onPointerObservable.add((pointerInfo) => {
 
         if (!pointerPinnedEquipment) network.previewEquipmentBadge(picked);
 
-        // DOM hover preview (always update)
         const info = network.getEquipmentInfo(picked);
-        // Debug: show which image is used for hover
-        if (info) console.log('[DEBUG] hover ->', picked?.name, 'title=', info.title, 'image=', info.image);
         if (info) ui.showHoverEquipment(info.image, info.title, clientX, clientY);
         else ui.hideHoverEquipment();
         return;
@@ -51,24 +48,10 @@ sceneMgr.scene.onPointerObservable.add((pointerInfo) => {
         pointerPinnedEquipment = network.togglePinnedEquipmentBadge(picked);
 
         const info = network.getEquipmentInfo(picked);
-        // Debug: show which image is used for click/modal
-        if (info) console.log('[DEBUG] pick ->', picked?.name, 'title=', info.title, 'image=', info.image, 'pinned=', !!pointerPinnedEquipment);
         if (pointerPinnedEquipment && info) ui.showEquipmentModal(info.image, info.title);
         else ui.hideEquipmentModal();
     }
 });
-
-// ============================================================
-// Road definitions (mirrors SceneManager road layout)
-// ============================================================
-const ROAD_SEGMENTS = [
-    { from: { x: -75, z: 5 }, to: { x: 75, z: 5 } },
-    { from: { x: -5, z: -75 }, to: { x: -5, z: 75 } },
-    { from: { x: -35, z: -75 }, to: { x: -30, z: 75 } },
-    { from: { x: 45, z: -75 }, to: { x: 50, z: 75 } },
-    { from: { x: -75, z: 35 }, to: { x: 75, z: 35 } },
-    { from: { x: -75, z: -35 }, to: { x: 75, z: -35 } }
-];
 
 function dist2d(a, b) {
     const dx = a.x - b.x;
@@ -221,18 +204,10 @@ function initNetwork() {
         };
     });
 
-    // Dynamic eligibility with realistic capillary threshold
     network.computeEligibility(
         NETWORK_CONFIG.SRO_COVERAGE_RADIUS,
         NETWORK_CONFIG.PBO_ELIGIBILITY_RADIUS
     );
-
-    const stats = {
-        eligible: network.equipments.buildings.filter(b => b.metadata.status === 'ELIGIBLE').length,
-        waiting: network.equipments.buildings.filter(b => b.metadata.status === 'WAITING').length,
-        nonEligible: network.equipments.buildings.filter(b => b.metadata.status === 'NON_ELIGIBLE').length
-    };
-    console.log('[FTTH] Eligibility Stats:', stats);
 
     // Start at step 0 with cinematic camera
     animController.setStep(0);

@@ -1,18 +1,144 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FTTH 3D Urban Deployment</title>
+    <title>FTTH 3D — Déploiement Fibre Optique</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-
 <body>
-    <div id="app">
-        <canvas id="canvas"></canvas>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="ui-overlay">
+
+        <!-- Top bar -->
+        <header id="top-bar">
+            <div class="top-bar-left">
+                <span class="logo-icon">&#x29C9;</span>
+                <span class="logo-text">FTTH <small>3D</small></span>
+                <span class="logo-badge">Déploiement</span>
+            </div>
+            <div class="top-bar-center">
+                <div class="progress-track">
+                    <span class="progress-label">Étape <span id="step-num">1</span>/8</span>
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="top-bar-right"></div>
+        </header>
+
+        <!-- Side panel -->
+        <aside id="side-panel">
+            <span id="stage-tag" class="stage-tag">Analyse</span>
+            <h2 id="stage-name">Analyse SIG</h2>
+            <p id="stage-desc" class="stage-desc">
+                Étude de la densité de population et du potentiel économique du quartier.
+            </p>
+
+            <div id="steps-container" class="steps-container"></div>
+
+            <div class="panel-controls">
+                <button id="prev-btn" class="btn btn-ghost" disabled>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                    Précédent
+                </button>
+                <button id="next-btn" class="btn btn-primary">
+                    Suivant
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+
+            <button id="auto-btn" class="btn btn-auto">
+                <svg class="icon-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+                Lecture automatique
+            </button>
+        </aside>
+
+        <!-- Camera label -->
+        <div id="cam-label" role="status" aria-live="polite"></div>
+
+        <!-- Resume hint -->
+        <div id="resume-hint">
+            Caméra libre — Cliquez sur Reprendre vue
+        </div>
+
+        <!-- Diagnostic popup -->
+        <div id="diagnostic-popup" role="alert">
+            <div class="diag-card">
+                <div class="diag-icon">&#x26A0;</div>
+                <div class="diag-content">
+                    <div class="diag-title">Bâtiment Non Raccordable</div>
+                    <div id="diag-reason" class="diag-reason"></div>
+                    <div id="diag-details" class="diag-details"></div>
+                </div>
+                <button id="diag-close" class="diag-close" aria-label="Fermer">&times;</button>
+            </div>
+        </div>
+
+        <!-- Info footer -->
+        <footer id="info-footer">
+            <div class="footer-stats">
+                <span class="stat" data-status="eligible">
+                    <span class="stat-dot" style="background:var(--eligible)"></span>
+                    <span class="stat-count" id="eligible-count">0</span>
+                    <span class="stat-label">Éligibles</span>
+                </span>
+                <span class="stat" data-status="non-eligible">
+                    <span class="stat-dot" style="background:var(--non-eligible)"></span>
+                    <span class="stat-count" id="noneligible-count">0</span>
+                    <span class="stat-label">Non éligibles</span>
+                </span>
+            </div>
+            <div class="footer-legend">NRO &rarr; SRO &rarr; PBO | Vue technique opérateur</div>
+        </footer>
+
+        <!-- Equipment preview (hover) -->
+        <div id="equipment-preview" aria-hidden="true">
+            <div class="preview-card">
+                <img class="preview-img" src="" alt="">
+                <span class="preview-title"></span>
+            </div>
+        </div>
+
+        <!-- Equipment modal -->
+        <div id="equipment-modal" role="dialog" aria-modal="true" aria-hidden="true">
+            <div class="modal-backdrop">
+                <div class="modal-card">
+                    <div class="modal-head">
+                        <h3 class="modal-title"></h3>
+                        <button class="modal-close" aria-label="Fermer">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <img class="modal-img" src="" alt="">
+                        <div class="modal-meta">
+                            <div class="meta-item">
+                                <span class="meta-key">Type</span>
+                                <span class="meta-value" id="modal-type">—</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-key">Portée</span>
+                                <span class="meta-value" id="modal-range">—</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-key">Capacité</span>
+                                <span class="meta-value" id="modal-capacity">—</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-key">Zone</span>
+                                <span class="meta-value" id="modal-zone">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
+
     <script type="module" src="/main.js"></script>
 </body>
-
 </html>
-<!-- jdnvjnf -->

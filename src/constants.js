@@ -9,7 +9,6 @@ export const COLORS = {
     ROAD: '#2d3436',
     BUILDING: '#bdc3c7',
     ELIGIBLE: '#2ed573',
-    WAITING: '#ffa502',
     NON_ELIGIBLE: '#ff4757',
     TEXT_PRIMARY: '#ffffff',
     TEXT_SECONDARY: '#b2bec3',
@@ -20,51 +19,76 @@ export const STAGES = [
     {
         id: 0,
         name: 'Analyse SIG',
-        description: 'Étude de la densité de population et du potentiel économique du quartier.',
-        camera: { radius: 100, alpha: -Math.PI / 4, beta: Math.PI / 3, target: { x: 0, y: 0, z: 0 } }
+        description: 'Étude de la densité de population et du potentiel économique du quartier.'
     },
     {
         id: 1,
         name: 'Décision Opérateur',
-        description: 'Définition de l\'architecture cible suite aux analyses SIG.',
-        camera: { radius: 80, alpha: -Math.PI / 2, beta: Math.PI / 4, target: { x: 0, y: 0, z: 0 } }
+        description: 'Définition de l\'architecture cible suite aux analyses SIG.'
     },
     {
         id: 2,
-        name: 'Étape 1: NRO',
-        description: 'Implantation du Noeud de Raccordement Optique (Cœur du réseau).',
-        camera: { radius: 25, alpha: -Math.PI / 1.5, beta: Math.PI / 3, target: { x: -68, y: 0, z: -58 } }
+        name: 'NRO — Nœud de Raccordement Optique',
+        description: 'Implantation du Nœud de Raccordement Optique, cœur du réseau FTTH.'
     },
     {
         id: 3,
-        name: 'Étape 2: Transport',
-        description: 'Déploiement des câbles de transport le long des axes principaux.',
-        camera: { radius: 60, alpha: -Math.PI / 4, beta: Math.PI / 3, target: { x: -20, y: 0, z: -20 } }
+        name: 'Transport — Câbles et génie civil',
+        description: 'Déploiement des câbles de transport et des fourreaux le long des axes principaux.'
     },
     {
         id: 4,
-        name: 'Étape 3: SRO',
-        description: 'Installation des Sous-Répartiteurs Optiques (Pulse de couverture).',
-        camera: { radius: 40, alpha: -Math.PI / 3, beta: Math.PI / 4, target: { x: -10, y: 0, z: -10 } }
+        name: 'SRO — Sous-Répartiteur Optique',
+        description: 'Installation des Sous-Répartiteurs Optiques pour la couverture locale des quartiers.'
     },
     {
         id: 5,
-        name: 'Étape 4: Distribution',
-        description: 'Liaison locale entre les SRO et les quartiers.',
-        camera: { radius: 50, alpha: -Math.PI / 2.5, beta: Math.PI / 3, target: { x: 30, y: 0, z: 30 } }
+        name: 'Distribution — Câblage SRO vers PBO',
+        description: 'Déploiement des câbles de distribution entre les SRO et les Points de Branchement Optique.'
     },
     {
         id: 6,
-        name: 'Étape 5: PBO',
-        description: 'Points de Branchement Optique : Bilan d\'éligibilité final.',
-        camera: { radius: 30, alpha: -Math.PI / 4, beta: Math.PI / 3, target: { x: 10, y: 3, z: 10 } }
+        name: 'PBO — Point de Branchement Optique',
+        description: 'Installation des Points de Branchement Optique et diagnostic d\'éligibilité des bâtiments.'
     },
     {
         id: 7,
-        name: 'Étape 6: Bâtiment Non-Éligible',
-        description: 'Bâtiment trop éloigné d\'un PBO (absence de couverture capillaire).',
-        camera: { radius: 25, alpha: -Math.PI / 4, beta: Math.PI / 3, target: { x: -35, y: 2, z: -35 } }
+        name: 'Diagnostic — Bâtiment Non Raccordable',
+        description: 'Bâtiment hors couverture capillaire : absence de PBO à proximité. Analyse des causes et solutions.'
     }
+];
+
+export const EQUIPMENT_DATA = {
+    NRO: {
+        type: 'Nœud de Raccordement Optique',
+        range: '20 km (backbone)',
+        capacity: 'Jusqu\'à 10 000 foyers',
+        zone: 'ZMD / ZTD',
+        description: 'Point central du réseau FTTH. Héberge les équipements actifs de collecte.'
+    },
+    SRO: {
+        type: 'Sous-Répartiteur Optique',
+        range: '5 km (distribution)',
+        capacity: '500–1 000 foyers',
+        zone: 'ZMD',
+        description: 'Nœud de distribution secondaire. Mutualise la fibre entre le NRO et les PBO.'
+    },
+    PBO: {
+        type: 'Point de Branchement Optique',
+        range: '300 m (capillaire)',
+        capacity: '10–20 foyers',
+        zone: 'ZMD / ZTD',
+        description: 'Dernier point de mutualisation avant le domicile. Point de raccordement des abonnés.'
+    }
+};
+
+export const ROAD_SEGMENTS = [
+    { from: { x: -75, z: 0 }, to: { x: 75, z: 10 } },
+    { from: { x: 0, z: -75 }, to: { x: -10, z: 75 } },
+    { from: { x: -40, z: -75 }, to: { x: -30, z: 75 } },
+    { from: { x: 40, z: -75 }, to: { x: 50, z: 75 } },
+    { from: { x: -75, z: 30 }, to: { x: 75, z: 40 } },
+    { from: { x: -75, z: -30 }, to: { x: 75, z: -40 } }
 ];
 
 export const NETWORK_CONFIG = {
@@ -75,6 +99,9 @@ export const NETWORK_CONFIG = {
     DUCT_CAPACITY: 4,
     CHAMBER_CAPACITY: 6,
     BUNDLE_GROWTH: 0.14,
+    SRO_COVERAGE_RADIUS: 50,
+    PBO_ELIGIBILITY_RADIUS: 300,
+    PBO_HOMES_TARGET: 10,
     NRO_POS: { x: -68, y: 0, z: -58 },
     SRO_POSITIONS: [
         { id: 'SRO-A', x: -10, z: -10, subscribers: 450, type: 'ZMD' },

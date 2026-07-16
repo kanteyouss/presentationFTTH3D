@@ -36,16 +36,6 @@ export class SceneManager {
         this.camera.wheelPrecision = 30;
     }
 
-    animateCamera(targetPos, targetRadius, targetAlpha, targetBeta, duration = 1500) {
-        const ease = new BABYLON.CubicEase();
-        ease.setEasingMode(BABYLON.EasingFunction.EASINGMODE_EASEINOUT);
-
-        const animRadius = BABYLON.Animation.CreateAndStartAnimation("camRadius", this.camera, "radius", 60, 60 * (duration / 1000), this.camera.radius, targetRadius, 0, ease);
-        const animAlpha = BABYLON.Animation.CreateAndStartAnimation("camAlpha", this.camera, "alpha", 60, 60 * (duration / 1000), this.camera.alpha, targetAlpha, 0, ease);
-        const animBeta = BABYLON.Animation.CreateAndStartAnimation("camBeta", this.camera, "beta", 60, 60 * (duration / 1000), this.camera.beta, targetBeta, 0, ease);
-        const animTarget = BABYLON.Animation.CreateAndStartAnimation("camTarget", this.camera, "target", 60, 60 * (duration / 1000), this.camera.target, new BABYLON.Vector3(targetPos.x, targetPos.y || 0, targetPos.z), 0, ease);
-    }
-
     setupLights() {
         const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), this.scene);
         hemiLight.intensity = 0.35;
@@ -285,8 +275,8 @@ export class SceneManager {
         const count = 3;
         for (let i = -count; i <= count; i++) {
             const pos = {
-                x: ((road.from.x + road.to.x) / 2) + i * dist * Math.sin(angle + Math.PI / 2),
-                z: ((road.from.z + road.to.z) / 2) + i * dist * Math.cos(angle + Math.PI / 2)
+                x: ((road.from.x + road.to.x) / 2) + i * dist * Math.cos(angle),
+                z: ((road.from.z + road.to.z) / 2) + i * dist * Math.sin(angle)
             };
             this.createTree({ x: pos.x + 6, z: pos.z });
             this.createLamp({ x: pos.x - 6, z: pos.z });

@@ -1,4 +1,10 @@
-import { STAGES } from './constants';
+import { STAGES, EQUIPMENT_DATA } from './constants';
+
+const TAG_MAP = {
+    0: 'Analyse', 1: 'Architecture', 2: 'Équipement',
+    3: 'Câblage', 4: 'Équipement', 5: 'Câblage',
+    6: 'Équipement', 7: 'Diagnostic'
+};
 
 export class UIManager {
     constructor(container, animationController, cameraController) {
@@ -11,41 +17,11 @@ export class UIManager {
     }
 
     init() {
-        const overlay = document.createElement('div');
-        overlay.id = 'ui-overlay';
-        overlay.innerHTML = `
-            <div class="panel">
-                <h1>FTTH Urban Deployment</h1>
-                <p id="stage-name" class="stage-name">${STAGES[0].name}</p>
-                <p id="stage-desc">${STAGES[0].description}</p>
-
-                <div class="steps-container">
-                    ${STAGES.map(s => `
-                        <div class="step-badge" id="step-${s.id}" data-id="${s.id}" title="${s.name}">
-                            ${s.id + 1}
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div class="controls">
-                    <button id="prev-btn" title="Précédent (←)">◀</button>
-                    <button id="auto-btn" class="auto-btn" title="Lecture auto (Espace)">▶ Auto</button>
-                    <button id="next-btn" class="primary" title="Suivant (→)">Suivant ▶</button>
-                </div>
-            </div>
-        `;
-
-        const footer = document.createElement('div');
-        footer.className = 'info-footer';
-        footer.innerHTML = `<p>NRO &rarr; SRO &rarr; PBO | Vue Technique Opérateur</p>`;
-
-        this.container.appendChild(overlay);
-        this.container.appendChild(footer);
-
+        this._updateBadges(0);
         this.updateUI(0);
 
         // Badge clicks
-        overlay.querySelectorAll('.step-badge').forEach(b => {
+        document.querySelectorAll('.step-badge').forEach(b => {
             b.addEventListener('click', () => {
                 const id = parseInt(b.dataset.id);
                 this._goTo(id);
@@ -57,7 +33,16 @@ export class UIManager {
         document.getElementById('prev-btn')?.addEventListener('click', () => this._prev());
         document.getElementById('auto-btn')?.addEventListener('click', () => this._toggleAutoPlay());
 
-        // Keyboard navigation — PowerPoint style
+        // Modal close
+        document.querySelector('#equipment-modal .modal-close')?.addEventListener('click', () => this.hideEquipmentModal());
+        document.querySelector('#equipment-modal .modal-backdrop')?.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) this.hideEquipmentModal();
+        });
+
+        // Diagnostic popup close
+        document.getElementById('diag-close')?.addEventListener('click', () => this._hideDiagnosticPopup());
+
+        // Keyboard navigation
         document.addEventListener('keydown', (e) => {
             switch (e.key) {
                 case 'ArrowRight':
@@ -92,8 +77,24 @@ export class UIManager {
         });
     }
 
+    _updateBadges(currentStep) {
+        const container = document.getElementById('steps-container');
+        container.innerHTML = STAGES.map((s, i) => `
+            <div class="step-item">
+                <div class="step-badge ${i === currentStep ? 'active' : ''} ${i < currentStep ? 'completed' : ''}"
+                     data-id="${s.id}"
+                     role="button"
+                     tabindex="0"
+                     aria-label="${s.name}${i === currentStep ? ' (étape en cours)' : ''}"
+                     title="${s.name}">
+                    ${i < currentStep ? '&#10003;' : i + 1}
+                    <span class="step-label">${s.name}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
     _goTo(stepIndex) {
-        // Close any open equipment modal and clear pinned equipment when changing stage
         this.hideEquipmentModal();
         try {
             if (this.controller && this.controller.networkModel && typeof this.controller.networkModel.togglePinnedEquipmentBadge === 'function') {
@@ -131,7 +132,13 @@ export class UIManager {
     _startAutoPlay(interval = 6000) {
         this._isAutoPlaying = true;
         const btn = document.getElementById('auto-btn');
-        if (btn) { btn.textContent = '⏸ Pause'; btn.classList.add('active'); }
+        if (btn) {
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                Pause
+            `;
+            btn.classList.add('active');
+        }
 
         this._autoPlayTimer = setInterval(() => {
             const next = this.controller.currentStep + 1;
@@ -147,55 +154,29 @@ export class UIManager {
         this._isAutoPlaying = false;
         clearInterval(this._autoPlayTimer);
         const btn = document.getElementById('auto-btn');
-        if (btn) { btn.textContent = '▶ Auto'; btn.classList.remove('active'); }
-    }
-
-    _toggleDistribution() {
-        const model = this.controller.networkModel;
-        if (!model) return;
-        const nextValue = !model.viewOptions.showDistribution;
-        model.setViewOptions({ showDistribution: nextValue });
-        this._syncViewButtons();
-        model.updateVisibilityForStep(this.controller.currentStep);
-    }
-
-    _toggleBundles() {
-        const model = this.controller.networkModel;
-        if (!model) return;
-        const nextValue = !model.viewOptions.showBundles;
-        model.setViewOptions({ showBundles: nextValue });
-        this._syncViewButtons();
-        model.updateVisibilityForStep(this.controller.currentStep);
-    }
-
-    _toggleSaturatedChambers() {
-        const model = this.controller.networkModel;
-        if (!model) return;
-        const nextValue = !model.viewOptions.showSaturatedChambers;
-        model.setViewOptions({ showSaturatedChambers: nextValue });
-        this._syncViewButtons();
-        model.updateVisibilityForStep(this.controller.currentStep);
-    }
-
-    _syncViewButtons() {
-        const model = this.controller.networkModel;
-        if (!model) return;
-        const distBtn = document.getElementById('toggle-distribution-btn');
-        const bundleBtn = document.getElementById('toggle-bundles-btn');
-        const chamberBtn = document.getElementById('toggle-chambers-btn');
-
-        if (distBtn) distBtn.classList.toggle('active', model.viewOptions.showDistribution);
-        if (bundleBtn) bundleBtn.classList.toggle('active', model.viewOptions.showBundles);
-        if (chamberBtn) chamberBtn.classList.toggle('active', model.viewOptions.showSaturatedChambers);
+        if (btn) {
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+                Lecture automatique
+            `;
+            btn.classList.remove('active');
+        }
     }
 
     updateUI(stepIndex) {
-        const badges = document.querySelectorAll('.step-badge');
-        badges.forEach(b => {
-            const id = parseInt(b.dataset.id);
-            b.classList.toggle('active', id === stepIndex);
-            b.classList.toggle('completed', id < stepIndex);
-        });
+        this._updateBadges(stepIndex);
+
+        const fill = document.getElementById('progress-fill');
+        if (fill) {
+            const pct = (stepIndex / (STAGES.length - 1)) * 100;
+            fill.style.width = `${Math.round(pct)}%`;
+        }
+
+        const stepNum = document.getElementById('step-num');
+        if (stepNum) stepNum.textContent = stepIndex + 1;
+
+        const tag = document.getElementById('stage-tag');
+        if (tag) tag.textContent = TAG_MAP[stepIndex] || '';
 
         const nameEl = document.getElementById('stage-name');
         const descEl = document.getElementById('stage-desc');
@@ -203,135 +184,124 @@ export class UIManager {
         if (nameEl) nameEl.textContent = STAGES[stepIndex]?.name || '';
         if (descEl) {
             if (stepIndex === 1) {
-                descEl.innerHTML = `<strong style="color:#00d2ff">DÉCISION OPÉRATEUR :</strong><br>Suite aux analyses SIG, l'opérateur valide le déploiement de l'architecture ZMD/ZTD.`;
+                descEl.innerHTML = '<strong style="color:var(--accent-light)">DÉCISION OPÉRATEUR :</strong><br>Suite aux analyses SIG, l\'opérateur valide le déploiement de l\'architecture ZMD/ZTD.';
             } else {
                 descEl.textContent = STAGES[stepIndex]?.description || '';
             }
         }
 
         // Footer: eligibility stats at step 6+
-        const footer = document.querySelector('.info-footer');
+        const footer = document.getElementById('info-footer');
         if (stepIndex >= 6 && this.controller.networkModel) {
             const buildings = this.controller.networkModel.equipments.buildings;
             const eligible = buildings.filter(b => b.metadata.status === 'ELIGIBLE').length;
-            const waiting = buildings.filter(b => b.metadata.status === 'WAITING').length;
             const nonEligible = buildings.filter(b => b.metadata.status === 'NON_ELIGIBLE').length;
-            footer.innerHTML = `
-                <span style="color:#2ed573">●</span> ${eligible} Éligibles &nbsp;|&nbsp;
-                <span style="color:#ffa502">●</span> ${waiting} En Attente &nbsp;|&nbsp;
-                <span style="color:#ff4757">●</span> ${nonEligible} Non Éligibles
-            `;
+
+            document.getElementById('eligible-count').textContent = eligible;
+            document.getElementById('noneligible-count').textContent = nonEligible;
+            footer.classList.add('visible');
         } else {
-            footer.innerHTML = `<p>NRO &rarr; SRO &rarr; PBO | Vue Technique Opérateur</p>`;
+            footer.classList.remove('visible');
         }
 
-        // Non-eligibility diagnostic popup at step 6
+        // Non-eligibility diagnostic popup at step 7
         this._updateDiagnosticPopup(stepIndex);
 
-        document.getElementById('next-btn').textContent = stepIndex === STAGES.length - 1 ? '✓ Fin' : 'Suivant ▶';
+        const nextBtn = document.getElementById('next-btn');
+        if (nextBtn) {
+            if (stepIndex === STAGES.length - 1) {
+                nextBtn.innerHTML = '&#10003; Fin';
+            } else {
+                nextBtn.innerHTML = 'Suivant <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>';
+            }
+        }
+
         document.getElementById('prev-btn').disabled = stepIndex === 0;
-        this._syncViewButtons();
     }
 
     _updateDiagnosticPopup(stepIndex) {
-        let popup = document.getElementById('diagnostic-popup');
+        const popup = document.getElementById('diagnostic-popup');
+        if (!popup) return;
+
         if (stepIndex === 7 && this.controller.networkModel) {
             const nonElig = this.controller.networkModel.equipments.buildings.find(b => b.metadata.status === 'NON_ELIGIBLE');
             if (nonElig) {
-                if (!popup) {
-                    popup = document.createElement('div');
-                    popup.id = 'diagnostic-popup';
-                    document.body.appendChild(popup);
+                const reason = nonElig.metadata.reason || 'Bâtiment hors couverture';
+                let details = '';
+
+                const distPBO = nonElig.metadata.nearestPboDist;
+                const distSRO = nonElig.metadata.nearestSroDist;
+                const inSro = nonElig.metadata.inSroCoverage;
+
+                if (distPBO != null) details += `Distance au PBO le plus proche : ${Math.round(distPBO)}m. `;
+                if (distSRO != null) details += `Distance au SRO le plus proche : ${Math.round(distSRO)}m.`;
+
+                if (inSro) {
+                    details += ' Le bâtiment est en zone SRO mais trop éloigné d\'un PBO. Solution : extension capillaire ou nouveau PBO.';
+                } else {
+                    details += ' Le bâtiment est hors zone SRO. Solution : recalage de zone ou extension du réseau de distribution.';
                 }
-                popup.innerHTML = `
-                    <div class="diag-icon">🔴</div>
-                    <div class="diag-title">Bâtiment Non Éligible</div>
-                    <div class="diag-reason">${nonElig.metadata.reason}</div>
-                `;
+
+                popup.querySelector('.diag-title').textContent = 'Bâtiment Non Raccordable';
+                popup.querySelector('.diag-reason').textContent = reason;
+                popup.querySelector('.diag-details').textContent = details;
                 popup.classList.add('visible');
                 return;
             }
         }
+        popup.classList.remove('visible');
+    }
+
+    _hideDiagnosticPopup() {
+        const popup = document.getElementById('diagnostic-popup');
         if (popup) popup.classList.remove('visible');
     }
 
     // --- Equipment hover / modal helpers ---
     showHoverEquipment(imageUrl, title, clientX = 0, clientY = 0) {
-        if (!this._hoverEl) {
-            const el = document.createElement('div');
-            el.id = 'equipment-preview';
-            el.innerHTML = `
-                <div class="preview-card">
-                    <img class="preview-img" src="" alt="equip">
-                    <div class="preview-title"></div>
-                </div>
-            `;
-            document.body.appendChild(el);
-            this._hoverEl = el;
-            this._hoverImg = el.querySelector('.preview-img');
-            this._hoverTitle = el.querySelector('.preview-title');
-        }
-        if (this._hoverImg.src !== imageUrl) this._hoverImg.src = imageUrl;
-        this._hoverTitle.textContent = title || '';
-        this._hoverEl.style.display = 'block';
-        this._hoverEl.style.left = `${clientX + 12}px`;
-        this._hoverEl.style.top = `${clientY + 12}px`;
+        const el = document.getElementById('equipment-preview');
+        if (!el) return;
+        const img = el.querySelector('.preview-img');
+        const titleEl = el.querySelector('.preview-title');
+        if (img && imageUrl) img.src = imageUrl;
+        if (titleEl) titleEl.textContent = title || '';
+        el.style.display = 'block';
+        el.style.left = `${clientX + 12}px`;
+        el.style.top = `${clientY + 12}px`;
     }
 
     hideHoverEquipment() {
-        if (this._hoverEl) this._hoverEl.style.display = 'none';
+        const el = document.getElementById('equipment-preview');
+        if (el) el.style.display = 'none';
     }
 
     showEquipmentModal(imageUrl, title) {
-        if (!this._modalEl) {
-            const el = document.createElement('div');
-            el.id = 'equipment-modal';
-            el.innerHTML = `
-                <div class="modal-backdrop" id="equipment-modal-backdrop">
-                    <div class="modal-card">
-                        <button class="modal-close" id="equipment-modal-close">✕</button>
-                        <div class="modal-title"></div>
-                        <div class="modal-body"><img class="modal-img" src="" alt="equip"></div>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(el);
-            this._modalEl = el;
-            this._modalImg = el.querySelector('.modal-img');
-            this._modalTitle = el.querySelector('.modal-title');
-            el.querySelector('#equipment-modal-close').addEventListener('click', () => this.hideEquipmentModal());
-            el.querySelector('#equipment-modal-backdrop').addEventListener('click', (e) => {
-                if (e.target === e.currentTarget) this.hideEquipmentModal();
-            });
-        }
-        // Reset any previous inline sizing
-        if (this._modalImg.src !== imageUrl) {
-            this._modalImg.style.width = '';
-            this._modalImg.onload = () => {
-                const natural = this._modalImg.naturalWidth || 0;
-                if (natural > 0) {
-                    // Aggressively upscale very small images for legibility,
-                    // but remain responsive and respect modal max widths.
-                    if (natural < 200) {
-                        this._modalImg.style.width = 'min(720px, 92vw)';
-                    } else if (natural < 800) {
-                        this._modalImg.style.width = 'min(640px, 92vw)';
-                    } else if (natural < 1200) {
-                        this._modalImg.style.width = 'min(520px, 88vw)';
-                    } else {
-                        this._modalImg.style.width = '';
-                    }
-                } else {
-                    this._modalImg.style.width = '';
-                }
-            };
-            this._modalImg.src = imageUrl;
-        }
-        this._modalTitle.textContent = title || '';
-        this._modalEl.style.display = 'block';
+        const modal = document.getElementById('equipment-modal');
+        if (!modal) return;
+        const img = modal.querySelector('.modal-img');
+        const titleEl = modal.querySelector('.modal-title');
+
+        if (img && imageUrl) img.src = imageUrl;
+        if (titleEl) titleEl.textContent = title || '';
+
+        // Populate metadata from EQUIPMENT_DATA
+        const type = (title || '').split(' ')[0];
+        const data = EQUIPMENT_DATA[type] || {};
+
+        const setMeta = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value || '—';
+        };
+        setMeta('modal-type', data.type || '—');
+        setMeta('modal-range', data.range || '—');
+        setMeta('modal-capacity', data.capacity || '—');
+        setMeta('modal-zone', data.zone || '—');
+
+        modal.style.display = 'block';
     }
 
     hideEquipmentModal() {
-        if (this._modalEl) this._modalEl.style.display = 'none';
+        const modal = document.getElementById('equipment-modal');
+        if (modal) modal.style.display = 'none';
     }
 }

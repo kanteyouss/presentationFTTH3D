@@ -48,19 +48,4 @@ export class AnimationController {
         }
     }
 
-    animateCable(cable) {
-        cable.visibility = 0;
-        const animation = new BABYLON.Animation(
-            "cableGrow",
-            "visibility",
-            60,
-            BABYLON.Animation.ANIMATIONTYPE_FLOAT,
-            BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
-        );
-
-        const keys = [{ frame: 0, value: 0 }, { frame: 60, value: 1 }];
-        animation.setKeys(keys);
-        cable.animations.push(animation);
-        this.scene.beginAnimation(cable, 0, 60, false);
-    }
 }
