@@ -5,6 +5,7 @@ import { NetworkModel } from './src/NetworkModel';
 import { AnimationController } from './src/AnimationController';
 import { CameraController } from './src/CameraController';
 import { UIManager } from './src/UIManager';
+import { LifeManager } from './src/LifeManager';
 import { NETWORK_CONFIG, ROAD_SEGMENTS } from './src/constants';
 
 const canvas = document.getElementById('canvas');
@@ -22,6 +23,19 @@ const animController = new AnimationController(sceneMgr.scene, network, sceneMgr
 
 // UI gets camera controller for Resume button
 const ui = new UIManager(document.getElementById('ui-overlay'), animController, camerCtrl);
+
+// Life (pedestrians, dogs, birds)
+const lifeManager = new LifeManager(sceneMgr.scene);
+lifeManager.setVisible(false);
+
+sceneMgr.scene.onBeforeRenderObservable.add(() => {
+    const dt = sceneMgr.engine.getDeltaTime() / 1000;
+    lifeManager.update(dt);
+});
+
+animController.onStepChange = (step) => {
+    lifeManager.setVisible(step >= 1);
+};
 
 let pointerPinnedEquipment = null;
 sceneMgr.scene.constantlyUpdateMeshUnderPointer = true;
