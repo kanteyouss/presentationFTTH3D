@@ -295,7 +295,6 @@ export class UIManager {
         setMeta('modal-type', data.type || '—');
         setMeta('modal-range', data.range || '—');
         setMeta('modal-capacity', data.capacity || '—');
-        setMeta('modal-zone', data.zone || '—');
 
         modal.style.display = 'block';
     }

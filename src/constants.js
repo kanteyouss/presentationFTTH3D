@@ -61,21 +61,21 @@ export const STAGES = [
 export const EQUIPMENT_DATA = {
     NRO: {
         type: 'Nœud de Raccordement Optique',
-        range: '20 km (backbone)',
+        range: '20 km',
         capacity: 'Jusqu\'à 10 000 foyers',
         zone: 'ZMD / ZTD',
         description: 'Point central du réseau FTTH. Héberge les équipements actifs de collecte.'
     },
     SRO: {
         type: 'Sous-Répartiteur Optique',
-        range: '5 km (distribution)',
+        range: '5 km',
         capacity: '500–1 000 foyers',
         zone: 'ZMD',
         description: 'Nœud de distribution secondaire. Mutualise la fibre entre le NRO et les PBO.'
     },
     PBO: {
         type: 'Point de Branchement Optique',
-        range: '300 m (capillaire)',
+        range: '300 m',
         capacity: '10–20 foyers',
         zone: 'ZMD / ZTD',
         description: 'Dernier point de mutualisation avant le domicile. Point de raccordement des abonnés.'
