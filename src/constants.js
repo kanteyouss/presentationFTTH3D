@@ -23,38 +23,43 @@ export const STAGES = [
     },
     {
         id: 1,
-        name: 'Décision Opérateur',
-        description: 'Définition de l\'architecture cible suite aux analyses SIG.'
-    },
-    {
-        id: 2,
         name: 'NRO — Nœud de Raccordement Optique',
         description: 'Implantation du Nœud de Raccordement Optique, cœur du réseau FTTH.'
     },
     {
-        id: 3,
+        id: 2,
         name: 'Transport — Câbles et génie civil',
         description: 'Déploiement des câbles de transport et des fourreaux le long des axes principaux.'
     },
     {
-        id: 4,
+        id: 3,
         name: 'SRO — Sous-Répartiteur Optique',
         description: 'Installation des Sous-Répartiteurs Optiques pour la couverture locale des quartiers.'
     },
     {
-        id: 5,
+        id: 4,
         name: 'Distribution — Câblage SRO vers PBO',
         description: 'Déploiement des câbles de distribution entre les SRO et les Points de Branchement Optique.'
     },
     {
-        id: 6,
+        id: 5,
         name: 'PBO — Point de Branchement Optique',
-        description: 'Installation des Points de Branchement Optique et diagnostic d\'éligibilité des bâtiments.'
+        description: 'Installation des Points de Branchement Optique au plus près des bâtiments.'
+    },
+    {
+        id: 6,
+        name: 'Éligibilité — Bâtiments non éligibles',
+        description: 'Coloration des bâtiments selon l\'éligibilité : les bâtiments non éligibles apparaissent en rouge.'
     },
     {
         id: 7,
+        name: 'Zones d\'influence SRO',
+        description: 'Affichage des zones d\'influence polygonales des SRO : les bâtiments rouges sont en dehors de ces zones.'
+    },
+    {
+        id: 8,
         name: 'Diagnostic — Bâtiment Non Raccordable',
-        description: 'Bâtiment hors couverture capillaire : absence de PBO à proximité. Analyse des causes et solutions.'
+        description: 'Bâtiment hors zone d\'influence des SRO. Analyse des causes et solutions.'
     }
 ];
 
@@ -99,14 +104,33 @@ export const NETWORK_CONFIG = {
     DUCT_CAPACITY: 4,
     CHAMBER_CAPACITY: 6,
     BUNDLE_GROWTH: 0.14,
-    SRO_COVERAGE_RADIUS: 50,
-    PBO_ELIGIBILITY_RADIUS: 300,
     PBO_HOMES_TARGET: 10,
     NRO_POS: { x: -68, y: 0, z: -58 },
     SRO_POSITIONS: [
-        { id: 'SRO-A', x: -10, z: -10, subscribers: 450, type: 'ZMD' },
-        { id: 'SRO-B', x: 30, z: -40, subscribers: 280, type: 'ZMD' },
-        { id: 'SRO-C', x: -30, z: 35, subscribers: 520, type: 'ZTD' },
-        { id: 'SRO-D', x: 55, z: 45, subscribers: 350, type: 'ZMD' }
+        {
+            id: 'SRO-A', x: -10, z: -10, subscribers: 450, type: 'ZMD',
+            zone: [
+                { x: -60, z: -60 }, { x: 0, z: -60 }, { x: 25, z: -25 },
+                { x: 25, z: 30 }, { x: -30, z: 35 }, { x: -60, z: 15 }
+            ]
+        },
+        {
+            id: 'SRO-B', x: 30, z: -40, subscribers: 280, type: 'ZMD',
+            zone: [
+                { x: 5, z: -70 }, { x: 70, z: -70 }, { x: 70, z: -10 }, { x: 30, z: -10 }
+            ]
+        },
+        {
+            id: 'SRO-C', x: -30, z: 35, subscribers: 520, type: 'ZTD',
+            zone: [
+                { x: -75, z: 0 }, { x: -25, z: 0 }, { x: 0, z: 40 }, { x: -75, z: 60 }
+            ]
+        },
+        {
+            id: 'SRO-D', x: 55, z: 45, subscribers: 350, type: 'ZMD',
+            zone: [
+                { x: 5, z: 5 }, { x: 70, z: 5 }, { x: 70, z: 70 }, { x: 5, z: 70 }
+            ]
+        }
     ]
 };

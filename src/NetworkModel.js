@@ -1,4 +1,5 @@
 import * as BABYLON from 'babylonjs';
+import earcut from 'earcut';
 import { COLORS, NETWORK_CONFIG, ROAD_SEGMENTS } from './constants';
 import { routeCable } from './RoadRouter';
 import NRO_IMG from './image/NRO.png';
@@ -81,7 +82,7 @@ export class NetworkModel {
         mat.diffuseTexture = new BABYLON.Texture(textureUrl, this.scene);
         mat.diffuseTexture.hasAlpha = true;
         mat.useAlphaFromDiffuseTexture = true;
-        mat.emissiveColor = BABYLON.Color3.White().scale(0.45);
+        mat.emissiveColor = BABYLON.Color3.White().scale(0.08);
         mat.backFaceCulling = false;
         badge.material = mat;
         badge.visibility = 0;
@@ -283,9 +284,9 @@ export class NetworkModel {
         const { w, d, h } = building.metadata.dimensions;
         const style = (seed % 3);
 
-        // Facade variation while keeping existing base mesh
-        const paletteApartment = ['#c6cdd5', '#bfc7d1', '#d1cbc2', '#c9d2c0'];
-        const paletteHouse = ['#d6c9b5', '#cbb7a3', '#c2b0a5', '#bfb9ad'];
+        // Facade variation — palette moderne (blanc cassé, beige, gris clair, pierre)
+        const paletteApartment = ['#e8eaed', '#dde1e7', '#d9d5ce', '#d4ddd0'];
+        const paletteHouse = ['#e0d7c8', '#d4c9b8', '#e3ddd4', '#cfc9bd'];
         const colorHex = (type === 'Apartment' ? paletteApartment : paletteHouse)[seed % 4];
         if (building.material) {
             building.material.diffuseColor = BABYLON.Color3.FromHexString(colorHex);
@@ -293,10 +294,10 @@ export class NetworkModel {
         }
 
         const winMat = this._getOrCreateMat(`winMat-${style}`, style === 0 ? '#8ec9ff' : (style === 1 ? '#a8d8ff' : '#9fd0f6'));
-        winMat.emissiveColor = BABYLON.Color3.FromHexString('#8ec9ff').scale(0.12);
+        winMat.emissiveColor = BABYLON.Color3.FromHexString('#8ec9ff').scale(0.35);
 
         const doorMat = this._getOrCreateMat(`doorMat-${style}`, style === 0 ? '#5a4638' : (style === 1 ? '#6b5240' : '#4f3d31'));
-        const roofMat = this._getOrCreateMat(`roofMat-${style}`, style === 0 ? '#6f737a' : (style === 1 ? '#626972' : '#737b85'));
+        const roofMat = this._getOrCreateMat(`roofMat-${style}`, style === 0 ? '#4a4d52' : (style === 1 ? '#5c5348' : '#3d4045'));
 
         // Windows repeated by floor and by bay
         const floorHeight = type === 'Apartment' ? 2.7 : 2.4;
@@ -441,10 +442,10 @@ export class NetworkModel {
         ];
 
         const matAppart = new BABYLON.StandardMaterial("appartMat", this.scene);
-        matAppart.diffuseColor = BABYLON.Color3.FromHexString(COLORS.BUILDING);
+        matAppart.diffuseColor = BABYLON.Color3.FromHexString('#d5d8dc');
 
         const matHouse = new BABYLON.StandardMaterial("houseMat", this.scene);
-        matHouse.diffuseColor = BABYLON.Color3.FromHexString("#a4b0be");
+        matHouse.diffuseColor = BABYLON.Color3.FromHexString('#d4ccc3');
 
         let totalCount = 0;
         clusters.forEach((cluster) => {
@@ -484,26 +485,59 @@ export class NetworkModel {
         });
     }
 
+    _pointInPolygon(px, pz, polygon) {
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i].x;
+            const zi = polygon[i].z;
+            const xj = polygon[j].x;
+            const zj = polygon[j].z;
+            const intersect = ((zi > pz) !== (zj > pz)) &&
+                (px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    _buildingOverlapsZone(cx, cz, radius, polygon) {
+        if (this._pointInPolygon(cx, cz, polygon)) return true;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const ax = polygon[j].x;
+            const az = polygon[j].z;
+            const bx = polygon[i].x;
+            const bz = polygon[i].z;
+            const dx = bx - ax;
+            const dz = bz - az;
+            const len2 = dx * dx + dz * dz;
+            let t = ((cx - ax) * dx + (cz - az) * dz) / len2;
+            t = Math.max(0, Math.min(1, t));
+            const px = ax + t * dx;
+            const pz = az + t * dz;
+            const d2 = (cx - px) * (cx - px) + (cz - pz) * (cz - pz);
+            if (d2 <= radius * radius) return true;
+        }
+        return false;
+    }
+
     /**
-     * Compute eligibility for every building based on:
-     * 1. SRO coverage (building must be within sroRadius of at least one SRO)
-     * 2. PBO proximity (building must be within pboThreshold of at least one PBO)
-     *
-     * @param {number} sroRadius  – max distance to an SRO to be "covered" (default 50)
-     * @param {number} pboThreshold – max distance to a PBO for eligibility (default 300, per spec)
+     * Compute eligibility for every building based on SRO influence zones only.
+     * A building located inside the polygon zone of at least one SRO is ELIGIBLE.
+     * A building outside every SRO zone is NON_ELIGIBLE.
      */
-    computeEligibility(sroRadius = 50, pboThreshold = 300) {
-        this.lastEligibilityConfig = { sroRadius, pboThreshold };
+    computeEligibility() {
+        this.lastEligibilityConfig = { zones: this.equipments.sros.map(s => s.zone || s.metadata?.zone || []) };
         const sroStats = this.equipments.sros.map(() => ({
             coveredBuildings: 0,
             estimatedSubscribers: 0
         }));
 
         this.equipments.buildings.forEach(b => {
-            // 1. Check SRO coverage
             let inSroCoverage = false;
+            let coveringIndex = -1;
+            let coveringDist = Infinity;
             let nearestSroDist = Infinity;
             let nearestSroIndex = -1;
+
             this.equipments.sros.forEach((s, idx) => {
                 const d = BABYLON.Vector3.Distance(
                     new BABYLON.Vector3(b.position.x, 0, b.position.z),
@@ -513,75 +547,61 @@ export class NetworkModel {
                     nearestSroDist = d;
                     nearestSroIndex = idx;
                 }
-                if (d <= sroRadius) inSroCoverage = true;
-            });
-
-            // 2. Check PBO proximity (only PBO meshes, not poles)
-            let nearestPboDist = Infinity;
-            this.equipments.pbos.forEach(p => {
-                if (!p.name.startsWith('pbo-')) return; // skip poles
-                const d = BABYLON.Vector3.Distance(
-                    new BABYLON.Vector3(b.position.x, 0, b.position.z),
-                    new BABYLON.Vector3(p.position.x, 0, p.position.z)
-                );
-                if (d < nearestPboDist) nearestPboDist = d;
+                const zone = s.zone || s.metadata?.zone || [];
+                const dims = b.metadata?.dimensions || { w: 3, d: 3 };
+                const footprintRadius = Math.sqrt(dims.w * dims.w + dims.d * dims.d) / 2;
+                if (zone.length > 0 && this._buildingOverlapsZone(b.position.x, b.position.z, footprintRadius, zone)) {
+                    inSroCoverage = true;
+                    if (d < coveringDist) {
+                        coveringDist = d;
+                        coveringIndex = idx;
+                    }
+                }
             });
 
             b.metadata._nearestSroDist = nearestSroDist;
-            b.metadata._nearestPboDist = nearestPboDist;
             b.metadata._nearestSroIndex = nearestSroIndex;
             b.metadata._inSroCoverage = inSroCoverage;
 
-            // Determine status (FTTH field logic):
-            // - Close to a PBO => eligible (drop can be provisioned)
-            // - In SRO zone but too far from PBO => waiting for capillary extension
-            // - Outside SRO zone and no nearby PBO => non-eligible
-            if (nearestPboDist <= pboThreshold) {
+            // Eligibility is determined ONLY by the SRO influence zone.
+            if (inSroCoverage) {
                 b.metadata.status = 'ELIGIBLE';
                 b.metadata.eligible = true;
                 b.metadata.reason = '';
-            } else if (inSroCoverage) {
-                b.metadata.status = 'WAITING';
-                b.metadata.eligible = false;
-                // b.metadata.reason = `Distance au PBO trop importante (${Math.round(nearestPboDist)}m > seuil ${pboThreshold}m)`;
             } else {
                 b.metadata.status = 'NON_ELIGIBLE';
                 b.metadata.eligible = false;
-                b.metadata.reason = `Hors zone de couverture SRO (distance: ${Math.round(nearestSroDist)}m)`;
+                b.metadata.reason = 'Hors zone de couverture SRO';
             }
 
-            if (inSroCoverage && nearestSroIndex >= 0) {
-                sroStats[nearestSroIndex].coveredBuildings += 1;
-                sroStats[nearestSroIndex].estimatedSubscribers += b.metadata.type === 'Apartment' ? 6 : 2;
+            if (coveringIndex >= 0) {
+                sroStats[coveringIndex].coveredBuildings += 1;
+                sroStats[coveringIndex].estimatedSubscribers += b.metadata.type === 'Apartment' ? 6 : 2;
             }
         });
 
         // Keep at least 2 red buildings for the final diagnostic stage.
         const nonEligible = this.equipments.buildings.filter(b => b.metadata.status === 'NON_ELIGIBLE');
         if (nonEligible.length === 0 && this.equipments.buildings.length > 0) {
-            const candidates = [...this.equipments.buildings].sort((a, b) => {
-                const pboDelta = (b.metadata._nearestPboDist ?? 0) - (a.metadata._nearestPboDist ?? 0);
-                if (pboDelta !== 0) return pboDelta;
-                return (b.metadata._nearestSroDist ?? 0) - (a.metadata._nearestSroDist ?? 0);
-            });
+            const candidates = [...this.equipments.buildings].sort((a, b) =>
+                (b.metadata._nearestSroDist ?? 0) - (a.metadata._nearestSroDist ?? 0)
+            );
 
             let forced = 0;
             for (const b of candidates) {
                 if (forced >= 2) break;
                 b.metadata.status = 'NON_ELIGIBLE';
                 b.metadata.eligible = false;
-                // b.metadata.reason = `Bâtiment trop éloigné du PBO (${Math.round(b.metadata._nearestPboDist || 0)}m).`;
+                b.metadata.reason = 'Hors zone de couverture SRO';
                 forced++;
             }
         }
 
         this.equipments.buildings.forEach(b => {
             b.metadata.nearestSroDist = b.metadata._nearestSroDist;
-            b.metadata.nearestPboDist = b.metadata._nearestPboDist;
             b.metadata.nearestSroIndex = b.metadata._nearestSroIndex;
             b.metadata.inSroCoverage = b.metadata._inSroCoverage;
             delete b.metadata._nearestSroDist;
-            delete b.metadata._nearestPboDist;
             delete b.metadata._nearestSroIndex;
             delete b.metadata._inSroCoverage;
         });
@@ -589,31 +609,36 @@ export class NetworkModel {
         this.equipments.sros.forEach((sro, idx) => {
             sro.metadata = {
                 ...(sro.metadata || {}),
-                coverageRadius: sroRadius,
+                coverageZone: sro.zone || [],
                 coveredBuildings: sroStats[idx].coveredBuildings,
                 estimatedSubscribers: sroStats[idx].estimatedSubscribers
             };
         });
     }
 
-    createCoverageCircle(pos, radius = 50) {
-        const disc = BABYLON.MeshBuilder.CreateDisc(`coverageDisc-${pos.x}`, {
-            radius: radius,
-            tessellation: 64
-        }, this.scene);
-        disc.position = new BABYLON.Vector3(pos.x, 0.25, pos.z);
-        disc.rotation.x = Math.PI / 2;
+    createCoveragePolygon(pos, zone) {
+        if (!zone || zone.length < 3) return null;
+        const shape = zone.map(v => new BABYLON.Vector3(v.x, 0, v.z));
+        const poly = BABYLON.MeshBuilder.CreatePolygon(`coveragePoly-${pos.x}`, {
+            shape,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE
+        }, this.scene, earcut);
+
+        // CreatePolygon keeps the vertices at their absolute XZ coordinates.
+        // The polygon lies flat on the ground (XZ plane), so only a small lift
+        // is needed to avoid z-fighting with the terrain.
+        poly.position = new BABYLON.Vector3(0, 0.25, 0);
 
         const mat = new BABYLON.StandardMaterial(`coverageMat-${pos.x}`, this.scene);
         mat.diffuseColor = BABYLON.Color3.FromHexString(COLORS.ACCENT);
         mat.emissiveColor = BABYLON.Color3.FromHexString(COLORS.ACCENT).scale(0.5);
         mat.alpha = 0.25;
         mat.backFaceCulling = false;
-        disc.material = mat;
+        poly.material = mat;
 
         // Pulsing scale animation — stays alive until dispose() is called
         const anim = new BABYLON.Animation(
-            'discPulse', 'scaling',
+            'polyPulse', 'scaling',
             30,
             BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
             BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
@@ -623,13 +648,13 @@ export class NetworkModel {
         anim.setEasingFunction(ease);
 
         anim.setKeys([
-            { frame: 0, value: new BABYLON.Vector3(0.8, 0.8, 0.8) },
+            { frame: 0, value: new BABYLON.Vector3(0.9, 0.9, 0.9) },
             { frame: 30, value: new BABYLON.Vector3(1.0, 1.0, 1.0) },
-            { frame: 60, value: new BABYLON.Vector3(0.8, 0.8, 0.8) }
+            { frame: 60, value: new BABYLON.Vector3(0.9, 0.9, 0.9) }
         ]);
 
-        disc.animations = [anim];
-        this.scene.beginAnimation(disc, 0, 60, true); // loop = true
+        poly.animations = [anim];
+        this.scene.beginAnimation(poly, 0, 60, true); // loop = true
 
         // Alpha pulse via beforeRender
         let t = 0;
@@ -637,9 +662,9 @@ export class NetworkModel {
             t += 0.04;
             mat.alpha = 0.1 + 0.2 * Math.abs(Math.sin(t));
         });
-        disc._alphaObserver = obs;
+        poly._alphaObserver = obs;
 
-        return disc;
+        return poly;
     }
 
     disposeCoverageCircles() {
@@ -655,6 +680,10 @@ export class NetworkModel {
      */
     getNonEligibleBuilding() {
         return this.equipments.buildings.find(b => b.metadata.status === 'NON_ELIGIBLE');
+    }
+
+    getNonEligibleBuildings() {
+        return this.equipments.buildings.filter(b => b.metadata.status === 'NON_ELIGIBLE');
     }
 
     /**
@@ -691,13 +720,17 @@ export class NetworkModel {
                 if (b.metadata.status === 'NON_ELIGIBLE') {
                     b.material.diffuseColor = BABYLON.Color3.FromHexString(COLORS.NON_ELIGIBLE);
                 }
-                else if (b.metadata.status === 'WAITING') b.material.diffuseColor = BABYLON.Color3.FromHexString(COLORS.WAITING);
                 else {
                     b.material.diffuseColor = BABYLON.Color3.FromHexString(COLORS.ELIGIBLE);
                 }
             }
             else {
-                b.material.diffuseColor = BABYLON.Color3.FromHexString(b.metadata.type === "Apartment" ? COLORS.BUILDING : "#a4b0be");
+                // Palette moderne — on se base sur la seed stockée dans l'index
+                const seed = parseInt(b.name.replace('building-', ''), 10) || 0;
+                const palApp = ['#e8eaed', '#dde1e7', '#d9d5ce', '#d4ddd0'];
+                const palHouse = ['#e0d7c8', '#d4c9b8', '#e3ddd4', '#cfc9bd'];
+                const pal = b.metadata.type === "Apartment" ? palApp : palHouse;
+                b.material.diffuseColor = BABYLON.Color3.FromHexString(pal[seed % pal.length]);
             }
         });
     }
@@ -710,7 +743,7 @@ export class NetworkModel {
 
         const mat = new BABYLON.StandardMaterial("nroMat", this.scene);
         mat.diffuseColor = BABYLON.Color3.FromHexString(COLORS.HUB);
-        mat.emissiveColor = BABYLON.Color3.FromHexString(COLORS.HUB).scale(0.4);
+        mat.emissiveColor = BABYLON.Color3.FromHexString(COLORS.HUB).scale(0.6);
         nro.material = mat;
 
         this.shadowGenerator.addShadowCaster(nro);
@@ -726,10 +759,11 @@ export class NetworkModel {
         sro.position = new BABYLON.Vector3(pos.x, 1.1, pos.z);
         sro.isPickable = true;
         sro.metadata = { ...(model || {}), equipmentType: 'SRO' };
+        sro.zone = model?.zone || [];
 
         const mat = new BABYLON.StandardMaterial(`sroMat-${id}`, this.scene);
         mat.diffuseColor = BABYLON.Color3.FromHexString(COLORS.CABINET);
-        mat.emissiveColor = BABYLON.Color3.FromHexString(COLORS.CABINET).scale(0.2);
+        mat.emissiveColor = BABYLON.Color3.FromHexString(COLORS.CABINET).scale(0.4);
         sro.material = mat;
 
         this.shadowGenerator.addShadowCaster(sro);
@@ -790,7 +824,7 @@ export class NetworkModel {
 
         const mat = new BABYLON.StandardMaterial(`pboMat-${id}`, this.scene);
         mat.diffuseColor = BABYLON.Color3.FromHexString(COLORS.BOX);
-        mat.emissiveColor = BABYLON.Color3.FromHexString(COLORS.BOX).scale(0.15);
+        mat.emissiveColor = BABYLON.Color3.FromHexString(COLORS.BOX).scale(0.4);
         pbo.material = mat;
 
         this.shadowGenerator.addShadowCaster(pbo);
@@ -934,15 +968,15 @@ export class NetworkModel {
         );
 
         if (this.equipments.nro) {
-            this.equipments.nro.visibility = stepIndex >= 2 ? 1 : 0;
+            this.equipments.nro.visibility = stepIndex >= 1 ? 1 : 0;
         }
 
         this.cables.transport.forEach(cable => {
-            cable.visibility = stepIndex >= 3 ? 1 : 0;
+            cable.visibility = stepIndex >= 2 ? 1 : 0;
         });
 
         this.cables.ducts.forEach(duct => {
-            duct.visibility = stepIndex >= 3 ? 1 : 0;
+            duct.visibility = stepIndex >= 2 ? 1 : 0;
             if (duct.material) {
                 const saturated = Boolean(duct.metadata?.saturated);
                 duct.material.alpha = saturated ? 0.42 : 0.25;
@@ -951,7 +985,7 @@ export class NetworkModel {
         });
 
         this.cables.chambers.forEach(chamber => {
-            const visible = stepIndex >= 3;
+            const visible = stepIndex >= 2;
             chamber.visibility = visible ? 1 : 0;
             if (!visible || !chamber.material) return;
 
@@ -967,11 +1001,11 @@ export class NetworkModel {
         });
 
         this.equipments.sros.forEach(sro => {
-            sro.visibility = stepIndex >= 4 ? 1 : 0;
+            sro.visibility = stepIndex >= 3 ? 1 : 0;
         });
 
-        const distributionVisible = stepIndex >= 5 && this.viewOptions.showDistribution;
-        const bundleVisible = stepIndex >= 5 && this.viewOptions.showBundles;
+        const distributionVisible = stepIndex >= 4 && this.viewOptions.showDistribution;
+        const bundleVisible = stepIndex >= 4 && this.viewOptions.showBundles;
         this.cables.distribution.forEach(cable => {
             cable.visibility = distributionVisible ? 1 : 0;
         });
@@ -981,7 +1015,7 @@ export class NetworkModel {
 
         if (this.equipments.pbos) {
             this.equipments.pbos.forEach(pbo => {
-                pbo.visibility = stepIndex >= 6 ? 1 : 0;
+                pbo.visibility = stepIndex >= 5 ? 1 : 0;
             });
         }
     }

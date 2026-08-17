@@ -1,9 +1,9 @@
 import { STAGES, EQUIPMENT_DATA } from './constants';
 
 const TAG_MAP = {
-    0: 'Analyse', 1: 'Architecture', 2: 'Équipement',
-    3: 'Câblage', 4: 'Équipement', 5: 'Câblage',
-    6: 'Équipement', 7: 'Diagnostic'
+    0: 'Analyse', 1: 'Équipement', 2: 'Câblage',
+    3: 'Équipement', 4: 'Câblage', 5: 'Équipement',
+    6: 'Éligibilité', 7: 'Zones', 8: 'Diagnostic'
 };
 
 export class UIManager {
@@ -183,11 +183,7 @@ export class UIManager {
 
         if (nameEl) nameEl.textContent = STAGES[stepIndex]?.name || '';
         if (descEl) {
-            if (stepIndex === 1) {
-                descEl.innerHTML = '<strong style="color:var(--accent-light)">DÉCISION OPÉRATEUR :</strong><br>Suite aux analyses SIG, l\'opérateur valide le déploiement de l\'architecture ZMD/ZTD.';
-            } else {
-                descEl.textContent = STAGES[stepIndex]?.description || '';
-            }
+            descEl.textContent = STAGES[stepIndex]?.description || '';
         }
 
         // Footer: eligibility stats at step 6+
@@ -223,24 +219,15 @@ export class UIManager {
         const popup = document.getElementById('diagnostic-popup');
         if (!popup) return;
 
-        if (stepIndex === 7 && this.controller.networkModel) {
+        if (stepIndex === 8 && this.controller.networkModel) {
             const nonElig = this.controller.networkModel.equipments.buildings.find(b => b.metadata.status === 'NON_ELIGIBLE');
             if (nonElig) {
-                const reason = nonElig.metadata.reason || 'Bâtiment hors couverture';
+                const reason = nonElig.metadata.reason || 'Bâtiment hors zone de couverture SRO';
                 let details = '';
 
-                const distPBO = nonElig.metadata.nearestPboDist;
                 const distSRO = nonElig.metadata.nearestSroDist;
-                const inSro = nonElig.metadata.inSroCoverage;
-
-                if (distPBO != null) details += `Distance au PBO le plus proche : ${Math.round(distPBO)}m. `;
                 if (distSRO != null) details += `Distance au SRO le plus proche : ${Math.round(distSRO)}m.`;
-
-                if (inSro) {
-                    details += ' Le bâtiment est en zone SRO mais trop éloigné d\'un PBO. Solution : extension capillaire ou nouveau PBO.';
-                } else {
-                    details += ' Le bâtiment est hors zone SRO. Solution : recalage de zone ou extension du réseau de distribution.';
-                }
+                details += ' Le bâtiment est en dehors de toutes les zones d\'influence des SRO. Solution : recalage de zone ou extension du réseau de distribution.';
 
                 popup.querySelector('.diag-title').textContent = 'Bâtiment Non Raccordable';
                 popup.querySelector('.diag-reason').textContent = reason;

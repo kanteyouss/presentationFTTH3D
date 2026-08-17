@@ -17,7 +17,23 @@ export class SceneManager {
 
         // Premium Effects
         this.glowLayer = new BABYLON.GlowLayer("glow", this.scene);
-        this.glowLayer.intensity = 0.6;
+        this.glowLayer.intensity = 0.7;
+
+        // Post-processing
+        this.setupPostProcessing();
+
+        // Ciel, nuages, avions
+        this._cloudMeshes = [];
+        this._planes = [];
+        this.createSkyDome();
+        this.createClouds();
+        this.createPlanes();
+
+        // Mise à jour des avions dans la boucle de rendu
+        this._planeObserver = this.scene.onBeforeRenderObservable.add(() => {
+            const dt = this.engine.getDeltaTime() / 1000;
+            this.updatePlanes(dt);
+        });
     }
 
     setupCamera() {
@@ -37,45 +53,56 @@ export class SceneManager {
     }
 
     setupLights() {
+        // Lumière hémisphérique — ciel bleu doux, reflet sol vert
         const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), this.scene);
-        hemiLight.intensity = 0.35;
-        hemiLight.diffuse = new BABYLON.Color3(1, 1, 1);
-        hemiLight.specular = new BABYLON.Color3(1, 1, 1);
-        hemiLight.groundColor = new BABYLON.Color3(0.1, 0.1, 0.2);
+        hemiLight.intensity = 0.55;
+        hemiLight.diffuse = BABYLON.Color3.FromHexString('#b8d4f0');
+        hemiLight.specular = BABYLON.Color3.FromHexString('#446688');
+        hemiLight.groundColor = BABYLON.Color3.FromHexString('#4a7c3f');
 
-        const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), this.scene);
-        dirLight.position = new BABYLON.Vector3(20, 40, 20);
-        dirLight.intensity = 1.2;
+        // Soleil directionnel avec ombres portées douces
+        const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-0.5, -1, -0.3), this.scene);
+        dirLight.position = new BABYLON.Vector3(30, 60, 30);
+        dirLight.intensity = 1.5;
+        dirLight.diffuse = BABYLON.Color3.FromHexString('#fff4e6');
 
-        // Larger shadow map and tuned parameters for higher contrast and crisper shadows
+        // Shadow map haute qualité avec adoucissement
         this.shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
         this.shadowGenerator.useBlurExponentialShadowMap = true;
-        // soften/sharpen kernel (higher -> blurrier), tuned by testing
-        this.shadowGenerator.blurKernel = 8;
-        // enable poisson sampling for nicer soft edges on some platforms
+        this.shadowGenerator.blurKernel = 12;
         this.shadowGenerator.usePoissonSampling = true;
-        // small bias to reduce shadow acne
-        this.shadowGenerator.bias = 0.0005;
-        // sometimes improves quality for thin geometry
+        this.shadowGenerator.bias = 0.0008;
+        this.shadowGenerator.normalBias = 0.05;
         this.shadowGenerator.forceBackFacesOnly = true;
+
+        // Tone mapping cinématographique (ACES)
+        this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
+        this.scene.imageProcessingConfiguration.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+        this.scene.imageProcessingConfiguration.contrast = 1.08;
+        this.scene.imageProcessingConfiguration.exposure = 1.0;
     }
 
     setupEnvironment() {
-        // Ground with grid
+        // Sol herbeux procédural (texture canvas)
         const ground = BABYLON.MeshBuilder.CreateGround("ground", {
             width: NETWORK_CONFIG.GROUND_SIZE,
             height: NETWORK_CONFIG.GROUND_SIZE
         }, this.scene);
 
+        const grassTex = this.createProceduralGrassTexture();
         ground.material = new BABYLON.StandardMaterial("groundMat", this.scene);
-        ground.material.diffuseColor = BABYLON.Color3.FromHexString("#d3ad8d"); // Dusty/Sandy ground
+        ground.material.diffuseTexture = grassTex;
+        ground.material.specularColor = BABYLON.Color3.Black();
         ground.receiveShadows = true;
 
-        // Emissive grid effect
+        // Grille subtile (lecture SIG)
         this.createGridLines();
 
-        // Roads (Schematic)
+        // Routes avec marquages
         this.createRoads();
+
+        // Végétation supplémentaire en bordure de scène
+        this.plantTrees();
     }
 
     createGridLines() {
@@ -296,19 +323,35 @@ export class SceneManager {
         body.material = mat;
     }
 
-    createTree(pos) {
-        const trunk = BABYLON.MeshBuilder.CreateCylinder("trunk", { height: 2, diameter: 0.4 }, this.scene);
-        trunk.position = new BABYLON.Vector3(pos.x, 1, pos.z);
-        const leaves = BABYLON.MeshBuilder.CreateSphere("leaves", { diameter: 3 }, this.scene);
-        leaves.position = new BABYLON.Vector3(pos.x, 3, pos.z);
+    createTree(pos, variant = 0) {
+        const trunkH = 1.8 + (variant % 3) * 0.5;
+        const crownD = 2.5 + (variant % 3) * 1.2;
+
+        const trunk = BABYLON.MeshBuilder.CreateCylinder("trunk", {
+            height: trunkH, diameter: 0.25 + (variant % 3) * 0.08, tessellation: 6
+        }, this.scene);
+        trunk.position = new BABYLON.Vector3(pos.x, trunkH / 2, pos.z);
+
+        const leaves = BABYLON.MeshBuilder.CreateSphere("leaves", {
+            diameter: crownD, segments: 6
+        }, this.scene);
+        leaves.position = new BABYLON.Vector3(pos.x, trunkH + crownD * 0.35, pos.z);
 
         const trunkMat = new BABYLON.StandardMaterial("trunkMat", this.scene);
-        trunkMat.diffuseColor = new BABYLON.Color3(0.4, 0.2, 0.1);
+        trunkMat.diffuseColor = new BABYLON.Color3(0.35, 0.2, 0.08);
+        trunkMat.specularColor = BABYLON.Color3.Black();
         trunk.material = trunkMat;
 
+        const greenBase = 0.35 + (variant % 4) * 0.1;
         const leavesMat = new BABYLON.StandardMaterial("leavesMat", this.scene);
-        leavesMat.diffuseColor = new BABYLON.Color3(0.1, 0.5, 0.1);
+        leavesMat.diffuseColor = new BABYLON.Color3(0.04, greenBase, 0.04);
+        leavesMat.specularColor = BABYLON.Color3.Black();
         leaves.material = leavesMat;
+
+        trunk.receiveShadows = true;
+        leaves.receiveShadows = true;
+        this.shadowGenerator?.addShadowCaster(trunk);
+        this.shadowGenerator?.addShadowCaster(leaves);
     }
 
     createLamp(pos) {
@@ -322,5 +365,285 @@ export class SceneManager {
         mat.emissiveColor = new BABYLON.Color3(0.8, 0.8, 0.5);
         pole.material = mat;
         lightBox.material = mat;
+    }
+
+    // ================================================================
+    // Texture d'herbe procédurale (DynamicTexture canvas)
+    // ================================================================
+    createProceduralGrassTexture() {
+        const size = 512;
+        const dt = new BABYLON.DynamicTexture("grassTex", { width: size, height: size }, this.scene, false);
+        const ctx = dt.getContext();
+
+        // Fond vert prairie
+        ctx.fillStyle = '#5a8a4a';
+        ctx.fillRect(0, 0, size, size);
+
+        // Bruit chromatique vert (variation pixel)
+        const imageData = ctx.getImageData(0, 0, size, size);
+        for (let i = 0; i < imageData.data.length; i += 4) {
+            const noise = (Math.random() - 0.5) * 40;
+            imageData.data[i] = Math.min(255, Math.max(0, imageData.data[i] + noise));
+            imageData.data[i + 1] = Math.min(255, Math.max(0, imageData.data[i + 1] + noise * 0.7));
+            imageData.data[i + 2] = Math.min(255, Math.max(0, imageData.data[i + 2] + noise * 0.4));
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        // Brins d'herbe individuels (traits fins)
+        for (let i = 0; i < 3000; i++) {
+            const x = Math.random() * size;
+            const y = Math.random() * size;
+            const g = 100 + Math.random() * 80;
+            ctx.strokeStyle = `rgb(35, ${g}, 25)`;
+            ctx.lineWidth = 1 + Math.random() * 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.bezierCurveTo(
+                x + (Math.random() - 0.5) * 4, y - 2 - Math.random() * 4,
+                x + (Math.random() - 0.5) * 4, y - 3 - Math.random() * 6,
+                x + (Math.random() - 0.5) * 3, y - 3 - Math.random() * 8
+            );
+            ctx.stroke();
+        }
+
+        dt.update();
+        dt.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
+        dt.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+        dt.uScale = 6;
+        dt.vScale = 6;
+        return dt;
+    }
+
+    // ================================================================
+    // Dôme céleste avec gradient procédural
+    // ================================================================
+    createSkyDome() {
+        const sky = BABYLON.MeshBuilder.CreateSphere("skyDome", { diameter: 900, segments: 16 }, this.scene);
+
+        const skyMat = new BABYLON.StandardMaterial("skyMat", this.scene);
+
+        const dt = new BABYLON.DynamicTexture("skyGrad", { width: 1, height: 256 }, this.scene, false);
+        const ctx = dt.getContext();
+        const grad = ctx.createLinearGradient(0, 0, 0, 256);
+        grad.addColorStop(0.0, '#0b1d3a');
+        grad.addColorStop(0.2, '#1e4d8c');
+        grad.addColorStop(0.45, '#4a90c4');
+        grad.addColorStop(0.7, '#7db8e0');
+        grad.addColorStop(1.0, '#c8e0f0');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 1, 256);
+        dt.update();
+
+        skyMat.emissiveTexture = dt;
+        skyMat.backFaceCulling = false;
+        skyMat.disableLighting = true;
+        sky.material = skyMat;
+        sky.infiniteDistance = true;
+    }
+
+    // ================================================================
+    // Nuages procéduraux (sphères blanches groupées)
+    // ================================================================
+    createClouds() {
+        const cloudMat = new BABYLON.StandardMaterial("cloudMat", this.scene);
+        cloudMat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+        cloudMat.alpha = 0.6;
+        cloudMat.backFaceCulling = false;
+        cloudMat.disableLighting = true;
+        cloudMat.specularColor = BABYLON.Color3.Black();
+
+        // Groupes de nuages répartis dans le ciel
+        const groups = [
+            { x: -50, z: -40, w: 18, d: 10, h: 45, n: 5 },
+            { x: 35, z: 50, w: 14, d: 8, h: 50, n: 4 },
+            { x: 60, z: -30, w: 20, d: 12, h: 42, n: 6 },
+            { x: -30, z: 60, w: 12, d: 10, h: 48, n: 4 },
+            { x: 0, z: -50, w: 16, d: 8, h: 52, n: 5 },
+            { x: -65, z: 20, w: 10, d: 7, h: 46, n: 3 },
+            { x: 45, z: -55, w: 15, d: 9, h: 44, n: 4 }
+        ];
+
+        groups.forEach((g, gi) => {
+            for (let i = 0; i < g.n; i++) {
+                const puff = BABYLON.MeshBuilder.CreateSphere(
+                    `cloud-${gi}-${i}`,
+                    { diameter: 1 + Math.random() * 0.5, segments: 6 },
+                    this.scene
+                );
+                puff.position = new BABYLON.Vector3(
+                    g.x + (Math.random() - 0.5) * g.w,
+                    g.h + Math.random() * 2,
+                    g.z + (Math.random() - 0.5) * g.d
+                );
+                puff.scaling = new BABYLON.Vector3(
+                    3 + Math.random() * 5,
+                    0.5 + Math.random() * 0.4,
+                    2.5 + Math.random() * 4
+                );
+                puff.material = cloudMat;
+                this._cloudMeshes.push(puff);
+            }
+        });
+    }
+
+    // ================================================================
+    // Avions de ligne (primitives) — vol circulaire
+    // ================================================================
+    createPlanes() {
+        const configs = [
+            { y: 55, radius: 70, speed: 0.08 },
+            { y: 65, radius: 90, speed: 0.12 },
+            { y: 48, radius: 55, speed: 0.06 }
+        ];
+
+        configs.forEach((cfg, idx) => {
+            this._buildPlane(cfg, idx);
+        });
+    }
+
+    _buildPlane(cfg, idx) {
+        const root = new BABYLON.TransformNode(`plane-root-${idx}`, this.scene);
+        root.position = new BABYLON.Vector3(0, cfg.y, 0);
+
+        const bodyMat = new BABYLON.StandardMaterial(`planeBody-${idx}`, this.scene);
+        bodyMat.diffuseColor = BABYLON.Color3.FromHexString('#e8e8f0');
+        bodyMat.specularColor = new BABYLON.Color3(0.2, 0.2, 0.3);
+
+        const wingMat = new BABYLON.StandardMaterial(`planeWing-${idx}`, this.scene);
+        wingMat.diffuseColor = BABYLON.Color3.FromHexString('#c0c8d0');
+        wingMat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.15);
+
+        const accentMat = new BABYLON.StandardMaterial(`planeAccent-${idx}`, this.scene);
+        accentMat.diffuseColor = BABYLON.Color3.FromHexString('#d04040');
+
+        const darkMat = new BABYLON.StandardMaterial(`planeDark-${idx}`, this.scene);
+        darkMat.diffuseColor = BABYLON.Color3.FromHexString('#3a3a44');
+
+        // Fuselage
+        const fuse = BABYLON.MeshBuilder.CreateBox(`fuse-${idx}`, {
+            width: 0.25, height: 0.22, depth: 1.0
+        }, this.scene);
+        fuse.parent = root;
+        fuse.material = bodyMat;
+
+        // Ailes principales
+        const wings = BABYLON.MeshBuilder.CreateBox(`wings-${idx}`, {
+            width: 1.8, height: 0.03, depth: 0.25
+        }, this.scene);
+        wings.parent = root;
+        wings.position = new BABYLON.Vector3(0, -0.02, -0.05);
+        wings.material = wingMat;
+
+        // Dérive verticale (queue)
+        const tailV = BABYLON.MeshBuilder.CreateBox(`tailV-${idx}`, {
+            width: 0.03, height: 0.3, depth: 0.15
+        }, this.scene);
+        tailV.parent = root;
+        tailV.position = new BABYLON.Vector3(0, 0.18, 0.4);
+        tailV.material = accentMat;
+
+        // Stabilisateur horizontal
+        const tailH = BABYLON.MeshBuilder.CreateBox(`tailH-${idx}`, {
+            width: 0.5, height: 0.03, depth: 0.12
+        }, this.scene);
+        tailH.parent = root;
+        tailH.position = new BABYLON.Vector3(0, 0, 0.4);
+        tailH.material = wingMat;
+
+        // Cockpit
+        const cockpit = BABYLON.MeshBuilder.CreateBox(`cockpit-${idx}`, {
+            width: 0.18, height: 0.12, depth: 0.15
+        }, this.scene);
+        cockpit.parent = root;
+        cockpit.position = new BABYLON.Vector3(0, 0.08, -0.45);
+        cockpit.material = darkMat;
+
+        // Nacelles moteurs
+        for (let s = -1; s <= 1; s += 2) {
+            const engine = BABYLON.MeshBuilder.CreateCylinder(`engine-${idx}-${s}`, {
+                height: 0.15, diameter: 0.08, tessellation: 6
+            }, this.scene);
+            engine.parent = root;
+            engine.position = new BABYLON.Vector3(s * 0.5, -0.12, -0.15);
+            engine.material = darkMat;
+        }
+
+        this._planes.push({
+            root,
+            angle: Math.random() * Math.PI * 2,
+            radius: cfg.radius,
+            height: cfg.y,
+            speed: cfg.speed,
+            rollPhase: Math.random() * Math.PI * 2
+        });
+    }
+
+    updatePlanes(dt) {
+        for (const plane of this._planes) {
+            plane.angle += dt * plane.speed;
+            plane.rollPhase += dt * 0.4;
+
+            const cx = Math.cos(plane.angle);
+            const sx = Math.sin(plane.angle);
+
+            plane.root.position.x = cx * plane.radius;
+            plane.root.position.z = sx * plane.radius;
+            plane.root.position.y = plane.height + 1.5 * Math.sin(plane.angle * 2);
+
+            // Cap (direction du vol)
+            plane.root.rotation.y = -plane.angle - Math.PI / 2;
+
+            // Roulis doux
+            plane.root.rotation.z = 0.08 * Math.sin(plane.rollPhase);
+
+            // Tangage léger
+            plane.root.rotation.x = 0.04 * Math.sin(plane.angle * 1.5);
+        }
+    }
+
+    // ================================================================
+    // Post-processing : Bloom + Tonemapping
+    // ================================================================
+    setupPostProcessing() {
+        try {
+            const pipeline = new BABYLON.DefaultRenderingPipeline(
+                "defaultPipeline", true, this.scene
+            );
+            pipeline.bloomEnabled = true;
+            pipeline.bloomThreshold = 0.65;
+            pipeline.bloomWeight = 0.35;
+            pipeline.bloomKernel = 64;
+            pipeline.bloomScale = 0.5;
+        } catch (e) {
+            console.warn('Post-processing pipeline non disponible:', e);
+        }
+    }
+
+    // ================================================================
+    // Plantation d'arbres supplémentaires
+    // ================================================================
+    plantTrees() {
+        // Bordures de terrain (périmètre)
+        const half = NETWORK_CONFIG.GROUND_SIZE / 2 - 5;
+        for (let i = 0; i < 30; i++) {
+            const side = Math.floor(i / 8);
+            let x, z;
+            switch (side % 4) {
+                case 0: x = -half + (i % 8) * 10; z = -half; break;
+                case 1: x = half; z = -half + (i % 8) * 10; break;
+                case 2: x = half - (i % 8) * 10; z = half; break;
+                default: x = -half; z = half - (i % 8) * 10; break;
+            }
+            this.createTree({ x, z }, i % 4);
+        }
+
+        // Alignement le long des routes secondaires
+        const roadTrees = [
+            { x: -35, z: -65 }, { x: -35, z: -55 }, { x: -35, z: 45 }, { x: -35, z: 55 }, { x: -35, z: 65 },
+            { x: 47, z: -65 }, { x: 47, z: -55 }, { x: 47, z: 45 }, { x: 47, z: 55 }, { x: 47, z: 65 },
+            { x: -65, z: 35 }, { x: -55, z: 35 }, { x: 55, z: 35 }, { x: 65, z: 35 },
+            { x: -65, z: -35 }, { x: -55, z: -35 }, { x: 55, z: -35 }, { x: 65, z: -35 }
+        ];
+        roadTrees.forEach((pos, i) => this.createTree(pos, i % 4));
     }
 }

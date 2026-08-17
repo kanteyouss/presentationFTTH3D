@@ -218,10 +218,7 @@ function initNetwork() {
         };
     });
 
-    network.computeEligibility(
-        NETWORK_CONFIG.SRO_COVERAGE_RADIUS,
-        NETWORK_CONFIG.PBO_ELIGIBILITY_RADIUS
-    );
+    network.computeEligibility();
 
     // Start at step 0 with cinematic camera
     animController.setStep(0);

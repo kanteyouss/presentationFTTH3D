@@ -13,53 +13,61 @@ const STAGE_CAMS = [
         label: 'Vue aérienne SIG – Analyse de densité'
     },
     {
-        // 1 – Operator decision: slow tilt down
-        target: { x: 5, y: 0, z: 5 },
-        radius: 80, alpha: -Math.PI / 3, beta: 0.75,
-        orbitSpeed: 0, orbitEnabled: false,
-        label: 'Décision Opérateur – Architecture ZMD/ZTD'
-    },
-    {
-        // 2 – NRO: tight zoom with slow orbit
+        // 1 – NRO: tight zoom with slow orbit
         target: { x: -68, y: 3, z: -58 },
         radius: 20, alpha: -Math.PI / 1.4, beta: Math.PI / 3.5,
         orbitSpeed: 0.0006, orbitEnabled: true,
         label: 'NRO – Cœur du réseau FTTH'
     },
     {
-        // 3 – Transport: tracking along main artery
+        // 2 – Transport: tracking along main artery
         target: { x: -5, y: 0, z: 5 },
         radius: 50, alpha: -Math.PI / 2.2, beta: Math.PI / 3.8,
         orbitSpeed: 0.0002, orbitEnabled: true,
         label: 'Câbles Transport – Axes principaux'
     },
     {
-        // 4 – SRO: hover over first SRO with slow turn
+        // 3 – SRO: hover over first SRO with slow turn
         target: { x: -10, y: 1.5, z: -10 },
         radius: 26, alpha: -Math.PI / 2.8, beta: Math.PI / 3.5,
         orbitSpeed: 0.0007, orbitEnabled: true,
         label: 'SRO – Zone de couverture locale'
     },
     {
-        // 5 – Distribution: street-level tracking (Intersection L_TOP)
+        // 4 – Distribution: street-level tracking
         target: { x: -35, y: 0, z: 35 },
         radius: 36, alpha: -Math.PI / 2, beta: Math.PI / 3.2,
         orbitSpeed: 0.0002, orbitEnabled: true,
         label: 'Câbles Distribution – Liaisons quartier'
     },
     {
-        // 6 – PBO: tight focus on pole zone (Specific extra PBO)
+        // 5 – PBO: tight focus on pole zone
         target: { x: 65, y: 6.5, z: 55 },
         radius: 16, alpha: -Math.PI / 1.8, beta: Math.PI / 3.2,
         orbitSpeed: 0.0008, orbitEnabled: true,
-        label: "PBO – Bilan d'éligibilité final"
+        label: 'PBO – Point de Branchement Optique'
     },
     {
-        // 7 – Non-eligible building: dynamically adjusted in goToStage()
-        target: { x: -35, y: 2, z: -35 },
-        radius: 18, alpha: -Math.PI / 2.2, beta: Math.PI / 3,
+        // 6 – Eligibility: wide view over colored buildings (red = non-eligible)
+        target: { x: 0, y: 0, z: 0 },
+        radius: 80, alpha: -Math.PI / 3, beta: 0.9,
         orbitSpeed: 0.0004, orbitEnabled: true,
-        label: 'Bâtiment Non-Éligible – Hors couverture capillaire'
+        label: 'Éligibilité – Bâtiments non éligibles en rouge'
+    },
+    {
+        // 7 – SRO influence zones: wide view showing the polygons
+        target: { x: 0, y: 0, z: 0 },
+        radius: 85, alpha: -Math.PI / 3.2, beta: 0.85,
+        orbitSpeed: 0.0004, orbitEnabled: true,
+        label: "Zones d'influence SRO – Bâtiments hors zone en rouge"
+    },
+    {
+        // 8 – Non-eligible buildings: wide focus on the whole block, dynamically
+        // centered on the centroid of the red buildings in goToStage()
+        target: { x: -35, y: 2, z: -35 },
+        radius: 48, alpha: -Math.PI / 2.2, beta: 1.15,
+        orbitSpeed: 0.0004, orbitEnabled: true,
+        label: 'Bâtiments Non-Éligibles – Hors zone d\'influence SRO'
     }
 ];
 
@@ -93,15 +101,26 @@ export class CameraController {
         if (!cfg) return;
         this.currentStage = index;
         this._userTookControl = false;
-        // À l'étape 7, dynamiquement cibler un bâtiment NON_ELIGIBLE
+        // À l'étape 8 (Diagnostic), cibler le centroïde du bloc de bâtiments NON_ELIGIBLE
         let targetCfg = { ...cfg };
-        if (index === 7 && this.networkModel) {
-            const nonEligibleBuilding = this.networkModel.getNonEligibleBuilding();
-            if (nonEligibleBuilding) {
-                const height = nonEligibleBuilding.metadata.dimensions?.h || 2;
+        if (index === 8 && this.networkModel) {
+            const nonEligible = this.networkModel.getNonEligibleBuildings();
+            if (nonEligible.length > 0) {
+                let sx = 0;
+                let sz = 0;
+                let maxH = 0;
+                nonEligible.forEach(b => {
+                    sx += b.position.x;
+                    sz += b.position.z;
+                    maxH = Math.max(maxH, b.metadata.dimensions?.h || 0);
+                });
                 targetCfg = {
                     ...cfg,
-                    target: { x: nonEligibleBuilding.position.x, y: height + 2, z: nonEligibleBuilding.position.z }
+                    target: {
+                        x: sx / nonEligible.length,
+                        y: maxH + 2,
+                        z: sz / nonEligible.length
+                    }
                 };
             }
         }

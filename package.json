@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "babylonjs": "^6.0.0",
-    "babylonjs-loaders": "^6.0.0"
+    "babylonjs-loaders": "^6.0.0",
+    "earcut": "^3.2.3"
   },
   "devDependencies": {
     "vite": "^5.0.0"

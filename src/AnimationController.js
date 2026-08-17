@@ -24,21 +24,25 @@ export class AnimationController {
     updateVisibility() {
         this.networkModel.updateVisibilityForStep(this.currentStep);
 
-        // Stage 4+: SRO + persistent coverage discs (kept here because they are
-        // a temporary cinematic overlay rather than permanent network assets).
-        const sroVisible = this.currentStep >= 4;
+        // Stage 3+: SRO visible. Coverage polygons are a cinematic overlay shown
+        // ONLY at the dedicated zone stages (7 = zones, 8 = diagnostic) so they
+        // explain why the red buildings are non-eligible (they sit outside every
+        // SRO polygon zone).
+        const sroVisible = this.currentStep >= 3;
+        const zonesVisible = this.currentStep === 7 || this.currentStep === 8;
         this.networkModel.equipments.sros.forEach(s => {
-            const wasInvisible = s.visibility === 0;
             s.visibility = sroVisible ? 1 : 0;
-
-            if (this.currentStep === 4 && wasInvisible) {
-                const disc = this.networkModel.createCoverageCircle(s.position);
-                this._coverageDiscs = this._coverageDiscs || [];
-                this._coverageDiscs.push(disc);
-            }
         });
 
-        if (this.currentStep !== 4 && this._coverageDiscs && this._coverageDiscs.length > 0) {
+        if (zonesVisible && (!this._coverageDiscs || this._coverageDiscs.length === 0)) {
+            this._coverageDiscs = [];
+            this.networkModel.equipments.sros.forEach(s => {
+                const poly = this.networkModel.createCoveragePolygon(s.position, s.zone || s.metadata?.zone);
+                if (poly) this._coverageDiscs.push(poly);
+            });
+        }
+
+        if (!zonesVisible && this._coverageDiscs && this._coverageDiscs.length > 0) {
             this.networkModel.disposeCoverageCircles();
             this._coverageDiscs.forEach(d => {
                 if (d._alphaObserver) this.networkModel.scene.onBeforeRenderObservable.remove(d._alphaObserver);
